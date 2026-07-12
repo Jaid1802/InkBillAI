@@ -1,0 +1,692 @@
+
+# Overall Architecture
+
+```text
+                          USER
+
+                            │
+
+            ┌───────────────┴───────────────┐
+            │                               │
+
+      Stylus Writing                 Text Billing
+
+            │                               │
+
+            └───────────────┬───────────────┘
+
+                            │
+
+                 Digital Ink Engine
+
+      (Stores every pen stroke, pressure,
+      speed, tilt, timestamp)
+
+                            │
+
+      ┌─────────────────────┼──────────────────────┐
+      │                     │                      │
+
+ Stroke Renderer      Stroke Database      Live Preview
+
+                            │
+
+                    AI Processing Engine
+
+                            │
+
+     ┌──────────────┬──────────────┬──────────────┐
+
+ Handwriting OCR   Layout Parser   Symbol Detector
+
+                            │
+
+                     Bill Structure AI
+
+                            │
+
+      Item Detector
+
+      Qty Detector
+
+      Rate Detector
+
+      GST Detector
+
+      Total Detector
+
+                            │
+
+                    Billing Calculator
+
+                            │
+
+                 Inventory / Customer
+
+                            │
+
+                     Receipt Generator
+
+                            │
+
+           PDF
+
+           Thermal Printer
+
+           WhatsApp
+
+           Share
+```
+
+---
+
+# Layered Architecture
+
+```text
+Presentation Layer
+
+Flutter UI
+
+↓
+
+Business Layer
+
+Billing Logic
+
+↓
+
+AI Layer
+
+Recognition Pipeline
+
+↓
+
+Digital Ink Layer
+
+Stroke Storage
+
+↓
+
+Local Database
+
+SQLite
+
+↓
+
+Cloud Sync
+
+Firebase / Supabase
+```
+
+---
+
+# Folder Structure
+
+```text
+lib/
+
+    app/
+
+    core/
+
+    features/
+
+        billing/
+
+        handwriting/
+
+        notes/
+
+        customers/
+
+        products/
+
+        reports/
+
+        printer/
+
+        ai/
+
+    services/
+
+    database/
+
+    widgets/
+
+    theme/
+
+assets/
+
+models/
+
+tflite/
+
+```
+
+---
+
+# Handwriting Engine
+
+This is your core innovation.
+
+Instead of saving only images...
+
+Save every point.
+
+```text
+Stroke
+
+↓
+
+Point
+
+↓
+
+x
+
+y
+
+pressure
+
+timestamp
+
+tilt
+
+velocity
+```
+
+Example
+
+```json
+{
+  "strokeId": 21,
+  "points": [
+    {
+      "x": 205,
+      "y": 450,
+      "pressure": 0.82,
+      "time": 1234
+    },
+    {
+      "x": 206,
+      "y": 451,
+      "pressure": 0.80,
+      "time": 1238
+    }
+  ]
+}
+```
+
+This allows:
+
+* replay writing
+* smoother rendering
+* vector scaling
+* AI training
+* much better recognition
+
+---
+
+# Recognition Pipeline
+
+```
+Stylus
+
+↓
+
+Stroke Capture
+
+↓
+
+Stroke Simplification
+
+↓
+
+Character Segmentation
+
+↓
+
+Word Detection
+
+↓
+
+Line Detection
+
+↓
+
+Table Detection
+
+↓
+
+Bill Understanding
+
+↓
+
+Calculator
+
+↓
+
+Receipt
+```
+
+---
+
+# AI Modules
+
+## Module 1
+
+Stroke Recognition
+
+Input
+
+```
+Pen strokes
+```
+
+Output
+
+```
+Tea
+```
+
+---
+
+## Module 2
+
+Layout Understanding
+
+Detects
+
+```
+Tea
+
+5
+
+12
+```
+
+means
+
+```
+Item
+
+Qty
+
+Rate
+```
+
+instead of random text.
+
+---
+
+## Module 3
+
+Bill AI
+
+Converts
+
+```
+Tea
+
+5
+
+12
+```
+
+into
+
+```json
+{
+    "item":"Tea",
+    "qty":5,
+    "rate":12
+}
+```
+
+---
+
+## Module 4
+
+Calculation Engine
+
+```
+qty × rate
+
+↓
+
+amount
+```
+
+Automatically updates.
+
+---
+
+## Module 5
+
+Error Detection
+
+Suppose
+
+```
+Tea
+
+5
+
+abc
+```
+
+AI asks
+
+> Is the rate ₹12?
+
+instead of failing.
+
+---
+
+# Data Flow
+
+```
+User writes
+
+↓
+
+Stroke captured
+
+↓
+
+Rendered
+
+↓
+
+Saved
+
+↓
+
+AI recognizes
+
+↓
+
+Structured JSON
+
+↓
+
+Calculator
+
+↓
+
+Receipt
+
+↓
+
+Database
+```
+
+---
+
+# Database Design
+
+## Bills
+
+```
+Bill
+
+id
+
+date
+
+customer
+
+subtotal
+
+tax
+
+total
+```
+
+---
+
+## Bill Items
+
+```
+BillItem
+
+id
+
+billId
+
+name
+
+qty
+
+rate
+
+amount
+```
+
+---
+
+## Strokes
+
+```
+Stroke
+
+strokeId
+
+pageId
+
+color
+
+width
+```
+
+---
+
+## Points
+
+```
+Point
+
+strokeId
+
+x
+
+y
+
+pressure
+
+time
+```
+
+---
+
+## Products
+
+```
+Product
+
+name
+
+price
+
+barcode
+
+stock
+```
+
+---
+
+## Customers
+
+```
+Customer
+
+name
+
+phone
+
+balance
+```
+
+---
+
+# UI Workflow
+
+```
+Dashboard
+
+↓
+
+New Bill
+
+↓
+
+Choose
+
+Handwriting
+
+OR
+
+Keyboard
+
+↓
+
+Write
+
+↓
+
+AI Live Recognition
+
+↓
+
+Review
+
+↓
+
+Print
+
+↓
+
+Save
+```
+
+---
+
+# Live Recognition
+
+Instead of waiting...
+
+Recognize while writing.
+
+Example
+
+Left
+
+```
+Tea
+```
+
+Right
+
+```
+Tea ✔
+```
+
+User writes
+
+```
+5
+```
+
+Immediately
+
+```
+Qty = 5
+```
+
+User writes
+
+```
+12
+```
+
+Immediately
+
+```
+Amount = 60
+```
+
+Feels magical.
+
+---
+
+# AI Floating Button
+
+```
+✨
+```
+
+Functions
+
+Convert handwriting
+
+Fix mistakes
+
+Add GST
+
+Summarize bill
+
+Translate
+
+Duplicate bill
+
+Create invoice
+
+---
+
+# Receipt Builder
+
+Templates
+
+```
+Classic
+
+Modern
+
+Retail
+
+Medical
+
+Restaurant
+```
+
+---
+
+# Future AI
+
+Customer says
+
+> Give me 2 milk and 5 biscuits
+
+AI creates bill automatically.
+
+---
+
+# Offline AI
+
+Everything should work without internet.
+
+Use
+
+```
+TensorFlow Lite
+
+ONNX Runtime
+
+MediaPipe
+
+ML Kit
+```
+
+Cloud AI should only enhance features.
+
+---
