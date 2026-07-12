@@ -1,0 +1,41 @@
+
+# Implementation Roadmap
+
+### Phase 1 – Digital Ink Foundation
+
+* Flutter app with stylus-first canvas
+* Stroke capture (x, y, pressure, tilt, timestamp)
+* Undo/redo, eraser, zoom, pan
+* Local storage of vector strokes
+* Infinite canvas and notebook pages
+
+### Phase 2 – Billing Workspace
+
+* Editable bill table
+* Live calculator
+* Customer and product management
+* Receipt preview
+* PDF and thermal printer support
+
+### Phase 3 – AI Recognition
+
+* Convert digital ink to structured text
+* Detect bill rows and columns
+* Recognize quantities, rates, totals
+* Confidence scores and correction UI
+
+### Phase 4 – Intelligence
+
+* Inventory updates
+* GST calculations
+* Voice billing
+* Analytics dashboard
+* Cloud sync and multi-device support
+
+### Phase 5 – Learning System
+
+* Personalized handwriting adaptation
+* User correction feedback loop
+* Faster recognition over time
+* Optional cloud model improvements
+
