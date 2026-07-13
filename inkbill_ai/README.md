@@ -1,3 +1,3 @@
 # inkbill_ai
 
-A new Flutter project.
+An appliction to automate and digitalize the old billing process.
