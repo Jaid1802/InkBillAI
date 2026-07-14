@@ -17,7 +17,7 @@ class MLKitRecognitionModel implements RecognitionModel {
       return Result.success(true);
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'ML Kit init failed: $e'));
+          RecognitionFailure(message: 'ML Kit init failed'));
     }
   }
 
@@ -38,7 +38,7 @@ class MLKitRecognitionModel implements RecognitionModel {
       ));
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'ML Kit recognition failed: $e'));
+          RecognitionFailure(message: 'ML Kit recognition failed'));
     }
   }
 

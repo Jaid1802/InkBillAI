@@ -15,7 +15,7 @@ class CustomerLocalDataSource {
       final rows = await _db.select(_db.customers).get();
       return Result.success(rows.map(_customerFromRow).toList());
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get customers: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to get customers'));
     }
   }
 
@@ -24,7 +24,7 @@ class CustomerLocalDataSource {
       final row = await (_db.select(_db.customers)..where((c) => c.id.equals(id))).getSingleOrNull();
       return Result.success(row != null ? _customerFromRow(row) : null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get customer: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to get customer'));
     }
   }
 
@@ -36,7 +36,7 @@ class CustomerLocalDataSource {
           .get();
       return Result.success(rows.map(_customerFromRow).toList());
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to search customers: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to search customers'));
     }
   }
 
@@ -57,7 +57,7 @@ class CustomerLocalDataSource {
       ));
       return Result.success(customer);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to create customer: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to create customer'));
     }
   }
 
@@ -76,7 +76,7 @@ class CustomerLocalDataSource {
       ));
       return Result.success(customer);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to update customer: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to update customer'));
     }
   }
 
@@ -85,7 +85,7 @@ class CustomerLocalDataSource {
       await (_db.delete(_db.customers)..where((c) => c.id.equals(id))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to delete customer: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to delete customer'));
     }
   }
 
@@ -96,7 +96,7 @@ class CustomerLocalDataSource {
       final result = await query.map((row) => row.read(countExp)).getSingle();
       return Result.success(result ?? 0);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to count customers: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to count customers'));
     }
   }
 

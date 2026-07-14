@@ -182,9 +182,12 @@ create policy "Draft bills can be updated by members"
   using (public.is_shop_member(shop_id) and status = 'draft')
   with check (public.is_shop_member(shop_id));
 
-create policy "Only owner and manager can delete bills"
+create policy "Only owner can delete finalized bills; manager can delete drafts"
   on public.bills for delete
-  using (public.has_role(shop_id, 'owner') or public.has_role(shop_id, 'manager'));
+  using (
+    public.has_role(shop_id, 'owner')
+    or (public.has_role(shop_id, 'manager') and status = 'draft')
+  );
 
 -- ============================================================
 -- BILL ITEMS

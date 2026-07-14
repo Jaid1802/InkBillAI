@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart' hide Provider, AuthState, AuthUser;
 import 'package:inkbill_ai/core/supabase/supabase_config.dart';
 import 'package:inkbill_ai/features/auth/domain/entities/auth_user.dart';
 
@@ -19,11 +19,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void _setupAuthListener() {
     _supabase.auth.onAuthStateChange.listen((data) {
       final session = data.session;
+      debugPrint('[AUTH_STATE] event=${data.event.name} session=${session != null}');
       if (session != null) {
+        state = state.copyWith(pendingVerificationEmail: null);
         _loadUserProfile(session);
       } else {
         state = const AuthState();
       }
+    }, onError: (e) {
+      debugPrint('[AUTH_STATE] listener error: $e');
     });
 
     _tryRestoreSession();
@@ -31,6 +35,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _tryRestoreSession() async {
     final session = _supabase.auth.currentSession;
+    debugPrint('[AUTH_INIT] currentSession=${session != null}');
     if (session != null) {
       await _loadUserProfile(session);
     } else {
@@ -41,26 +46,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _loadUserProfile(Session session) async {
     try {
       final userId = session.user.id;
-      final userMetadata = session.user.userMetadata;
-
-      final fullName = userMetadata?['full_name'] as String? ?? '';
-      final shopName = userMetadata?['shop_name'] as String? ?? '';
-      final shopId = userMetadata?['shop_id'] as String? ?? '';
-
-      if (fullName.isNotEmpty && shopId.isNotEmpty) {
-        state = AuthState(
-          user: AuthUser(
-            id: userId,
-            fullName: fullName,
-            email: session.user.email ?? '',
-            role: 'owner',
-            shopId: shopId,
-          ),
-          shop: AuthShop(id: shopId, shopName: shopName),
-          isAuthenticated: true,
-        );
-        return;
-      }
 
       final profile = await _supabase
           .from('profiles')
@@ -90,19 +75,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
           isAuthenticated: true,
         );
       } else {
+        final userMetadata = session.user.userMetadata;
         state = AuthState(
           user: AuthUser(
             id: userId,
-            fullName: fullName,
+            fullName: userMetadata?['full_name'] as String? ?? '',
             email: session.user.email ?? '',
             role: 'owner',
-            shopId: shopId,
+            shopId: userMetadata?['shop_id'] as String? ?? '',
           ),
           isAuthenticated: true,
         );
       }
     } catch (e) {
-      debugPrint('AuthNotifier: failed to load profile: $e');
+      debugPrint('[AUTH_STATE] failed to load profile: $e');
       state = const AuthState();
     }
   }
@@ -114,11 +100,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String password,
     String? phone,
   }) async {
-    state = state.copyWith(isLoading: true, error: null);
+    final normalizedEmail = email.trim().toLowerCase();
+    debugPrint('[AUTH_SIGNUP] started email=$normalizedEmail');
+
+    state = state.copyWith(isLoading: true, error: null, pendingVerificationEmail: null);
 
     try {
       final response = await _supabase.auth.signUp(
-        email: email.trim(),
+        email: normalizedEmail,
         password: password,
         data: {
           'full_name': fullName.trim(),
@@ -127,13 +116,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
         },
       );
 
+      debugPrint('[AUTH_SIGNUP] user=${response.user?.id} session=${response.session != null}');
+
       if (response.session != null) {
         await _createProfileAndShop(
           userId: response.user!.id,
           fullName: fullName.trim(),
           shopName: shopName.trim(),
           phone: phone?.trim(),
-          email: email.trim(),
+          email: normalizedEmail,
         );
 
         await _loadUserProfile(response.session!);
@@ -142,19 +133,121 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       state = state.copyWith(
         isLoading: false,
-        error: 'Please check your email to verify your account.',
+        pendingVerificationEmail: normalizedEmail,
       );
-      return 'Please check your email to verify your account.';
+      return null;
     } on AuthException catch (e) {
-      final msg = _mapAuthException(e);
-      state = state.copyWith(isLoading: false, error: msg);
-      return msg;
+      debugPrint('[AUTH_SIGNUP] AuthException status=${e.statusCode} message=${e.message}');
+      state = state.copyWith(isLoading: false, error: e.message);
+      return e.message;
     } catch (e) {
-      debugPrint('Signup error: $e');
+      debugPrint('[AUTH_SIGNUP] error: $e');
       const msg = 'Something went wrong. Please try again.';
       state = state.copyWith(isLoading: false, error: msg);
       return msg;
     }
+  }
+
+  Future<String?> verifyOtp({
+    required String email,
+    required String otp,
+  }) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    debugPrint('[AUTH_VERIFY_OTP] started email=$normalizedEmail otp.length=${otp.length}');
+
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final response = await _supabase.auth.verifyOTP(
+        email: normalizedEmail,
+        token: otp,
+        type: OtpType.email,
+      );
+
+      debugPrint('[AUTH_VERIFY_OTP] session=${response.session != null} user=${response.user?.id}');
+
+      if (response.session != null) {
+        final userId = response.user?.id ?? response.session!.user.id;
+        await _createProfileAndShop(
+          userId: userId,
+          fullName: response.session!.user.userMetadata?['full_name'] as String? ?? '',
+          shopName: response.session!.user.userMetadata?['shop_name'] as String? ?? '',
+          phone: response.session!.user.userMetadata?['phone'] as String?,
+          email: normalizedEmail,
+        );
+
+        await _loadUserProfile(response.session!);
+        state = state.copyWith(
+          isLoading: false,
+          pendingVerificationEmail: null,
+        );
+        return null;
+      }
+
+      const msg = 'The verification code is incorrect. Please check the code and try again.';
+      state = state.copyWith(isLoading: false, error: msg);
+      return msg;
+    } on AuthException catch (e) {
+      debugPrint('[AUTH_VERIFY_OTP] AuthException status=${e.statusCode} message=${e.message}');
+      String msg;
+      final lower = e.message.toLowerCase();
+      if (lower.contains('token') && (lower.contains('invalid') || lower.contains('incorrect') || lower.contains('wrong'))) {
+        msg = 'The verification code is incorrect. Please check the code and try again.';
+      } else if (lower.contains('expired')) {
+        msg = 'This verification code has expired. Request a new code to continue.';
+      } else if (lower.contains('already') && (lower.contains('used') || lower.contains('verified') || lower.contains('confirmed'))) {
+        msg = 'This code has already been used. Please try logging in.';
+      } else if (lower.contains('rate limit') || lower.contains('too many')) {
+        msg = 'Too many attempts. Please wait a moment before trying again.';
+      } else if (lower.contains('network') || lower.contains('timeout') || lower.contains('connect')) {
+        msg = 'Unable to connect. Check your internet connection and try again.';
+      } else {
+        msg = 'Something went wrong. Please try again.';
+      }
+      state = state.copyWith(isLoading: false, error: msg);
+      return msg;
+    } catch (e) {
+      debugPrint('[AUTH_VERIFY_OTP] error: $e');
+      const msg = 'Unable to connect. Check your internet connection and try again.';
+      state = state.copyWith(isLoading: false, error: msg);
+      return msg;
+    }
+  }
+
+  Future<String?> resendOtp(String email) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    debugPrint('[AUTH_RESEND] started email=$normalizedEmail');
+
+    try {
+      await _supabase.auth.resend(
+        type: OtpType.signup,
+        email: normalizedEmail,
+      );
+
+      debugPrint('[AUTH_RESEND] success');
+      return null;
+    } on AuthException catch (e) {
+      debugPrint('[AUTH_RESEND] AuthException status=${e.statusCode} message=${e.message}');
+      final lower = e.message.toLowerCase();
+      if (lower.contains('rate limit') || lower.contains('too many')) {
+        return 'Too many attempts. Please wait a moment before trying again.';
+      }
+      if (lower.contains('network') || lower.contains('timeout') || lower.contains('connect')) {
+        return 'Unable to connect. Check your internet connection and try again.';
+      }
+      return 'Something went wrong. Please try again.';
+    } catch (e) {
+      debugPrint('[AUTH_RESEND] error: $e');
+      return 'Unable to connect. Check your internet connection and try again.';
+    }
+  }
+
+  void setPendingVerificationEmail(String email) {
+    state = state.copyWith(pendingVerificationEmail: email.trim().toLowerCase());
+  }
+
+  void clearPendingVerification() {
+    state = state.copyWith(pendingVerificationEmail: null);
   }
 
   Future<void> _createProfileAndShop({
@@ -172,29 +265,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'p_phone': phone ?? '',
         'p_email': email,
       });
+      debugPrint('[AUTH_SIGNUP] onboard_new_user succeeded');
     } catch (e) {
-      debugPrint('RPC onboard_new_user failed (may need manual setup): $e');
-      try {
-        final shop = await _supabase
-            .from('shops')
-            .insert({'name': shopName, 'owner_id': userId})
-            .select()
-            .single();
-
-        await _supabase.from('profiles').insert({
-          'id': userId,
-          'full_name': fullName,
-          'phone': phone,
-        });
-
-        await _supabase.from('shop_members').insert({
-          'shop_id': shop['id'],
-          'user_id': userId,
-          'role': 'owner',
-        });
-      } catch (insertError) {
-        debugPrint('Direct insert fallback also failed: $insertError');
-      }
+      debugPrint('[AUTH_SIGNUP] RPC onboard_new_user failed: $e');
+      rethrow;
     }
   }
 
@@ -202,13 +276,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String password,
   }) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    debugPrint('[AUTH_LOGIN] started email=$normalizedEmail');
+
     state = state.copyWith(isLoading: true, error: null);
 
     try {
       final response = await _supabase.auth.signInWithPassword(
-        email: email.trim(),
+        email: normalizedEmail,
         password: password,
       );
+
+      debugPrint('[AUTH_LOGIN] session=${response.session != null} user=${response.user?.id}');
 
       if (response.session != null) {
         await _loadUserProfile(response.session!);
@@ -219,11 +298,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false, error: msg);
       return msg;
     } on AuthException catch (e) {
-      final msg = _mapAuthException(e);
+      debugPrint('[AUTH_LOGIN] AuthException status=${e.statusCode} message=${e.message}');
+      final msg = e.message;
+      final lower = msg.toLowerCase();
+      if (lower.contains('email not confirmed') || lower.contains('email not verified')) {
+        state = state.copyWith(
+          isLoading: false,
+          error: 'Please verify your email before signing in.',
+          pendingVerificationEmail: normalizedEmail,
+        );
+        return 'Please verify your email before signing in.';
+      }
       state = state.copyWith(isLoading: false, error: msg);
       return msg;
     } catch (e) {
-      debugPrint('Login error: $e');
+      debugPrint('[AUTH_LOGIN] error: $e');
       const msg = 'Unable to connect. Check your internet connection and try again.';
       state = state.copyWith(isLoading: false, error: msg);
       return msg;
@@ -231,15 +320,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    debugPrint('[AUTH_STATE] logout');
     try {
       await _supabase.auth.signOut();
     } catch (e) {
-      debugPrint('Logout error: $e');
+      debugPrint('[AUTH_STATE] logout error: $e');
     }
     state = const AuthState();
   }
 
-  Future<String?> deleteAccount() async {
+  Future<String?> deleteAccount({Future<void> Function()? onBeforeSignOut}) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -265,7 +355,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await _supabase.from('shop_members').delete().eq('shop_id', shop['id']);
       }
 
-      await _supabase.auth.admin.deleteUser(userId);
+      if (onBeforeSignOut != null) {
+        await onBeforeSignOut();
+      }
+
       await _supabase.auth.signOut();
       state = const AuthState();
       return null;
@@ -282,7 +375,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _supabase.auth.resetPasswordForEmail(email.trim());
       return null;
     } on AuthException catch (e) {
-      return _mapAuthException(e);
+      debugPrint('[AUTH_LOGIN] resetPassword error: ${e.message}');
+      return e.message;
     } catch (e) {
       debugPrint('Reset password error: $e');
       return 'Something went wrong. Please try again.';
@@ -294,7 +388,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _supabase.auth.updateUser(UserAttributes(password: newPassword));
       return null;
     } on AuthException catch (e) {
-      return _mapAuthException(e);
+      debugPrint('Update password error: ${e.message}');
+      return e.message;
     } catch (e) {
       debugPrint('Update password error: $e');
       return 'Something went wrong. Please try again.';
@@ -303,29 +398,5 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void clearError() {
     state = state.copyWith(error: null);
-  }
-
-  String _mapAuthException(AuthException e) {
-    final msg = e.message.toLowerCase();
-    if (msg.contains('email already registered') || msg.contains('already exists') || msg.contains('duplicate')) {
-      return 'An account with this email already exists.';
-    }
-    if (msg.contains('invalid login credentials') || msg.contains('invalid credentials')) {
-      return 'Invalid email or password.';
-    }
-    if (msg.contains('weak password')) {
-      return 'Password is too weak. Use at least 8 characters with letters and numbers.';
-    }
-    if (msg.contains('network') || msg.contains('timeout') || msg.contains('connect')) {
-      return 'Unable to connect. Check your internet connection and try again.';
-    }
-    if (msg.contains('email not confirmed') || msg.contains('email not verified')) {
-      return 'Please verify your email before continuing.';
-    }
-    if (msg.contains('rate limit')) {
-      return 'Too many attempts. Please wait and try again.';
-    }
-    debugPrint('Unmapped AuthException: ${e.message}');
-    return 'Something went wrong. Please try again.';
   }
 }

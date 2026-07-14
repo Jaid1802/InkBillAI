@@ -23,7 +23,7 @@ class BillingLocalDataSource {
       }
       return Result.success(bills);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get bills: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to get bills'));
     }
   }
 
@@ -34,7 +34,7 @@ class BillingLocalDataSource {
       final items = await _getItemsForBill(id);
       return Result.success(_billFromRowTyped(row, items));
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get bill: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to get bill'));
     }
   }
 
@@ -61,7 +61,7 @@ class BillingLocalDataSource {
       }
       return Result.success(bill);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to create bill: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to create bill'));
     }
   }
 
@@ -87,7 +87,7 @@ class BillingLocalDataSource {
       }
       return Result.success(bill);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to update bill: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to update bill'));
     }
   }
 
@@ -97,7 +97,7 @@ class BillingLocalDataSource {
       await (_db.delete(_db.bills)..where((b) => b.id.equals(id))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to delete bill: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to delete bill'));
     }
   }
 
@@ -107,7 +107,7 @@ class BillingLocalDataSource {
           .write(BillsCompanion(status: Value('finalized')));
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to finalize bill: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to finalize bill'));
     }
   }
 
@@ -116,7 +116,7 @@ class BillingLocalDataSource {
       final count = await _db.bills.count().getSingle();
       return Result.success(count);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to count bills: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to count bills'));
     }
   }
 
@@ -133,7 +133,7 @@ class BillingLocalDataSource {
       final total = rows.fold<double>(0, (sum, row) => sum + row.total);
       return Result.success(total);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get revenue: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to get revenue'));
     }
   }
 

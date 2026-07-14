@@ -15,7 +15,7 @@ class RecognitionLocalDataSource {
       ));
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'Local recognition failed: $e'));
+          RecognitionFailure(message: 'Local recognition failed'));
     }
   }
 

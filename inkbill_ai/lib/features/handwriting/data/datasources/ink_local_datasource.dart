@@ -29,7 +29,7 @@ class InkLocalDataSource {
       }
       return Result.success(pages);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get pages: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to get pages'));
     }
   }
 
@@ -47,7 +47,7 @@ class InkLocalDataSource {
         label: row.label,
       ));
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get page: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to get page'));
     }
   }
 
@@ -70,7 +70,7 @@ class InkLocalDataSource {
         label: label,
       ));
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to create page: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to create page'));
     }
   }
 
@@ -88,7 +88,7 @@ class InkLocalDataSource {
       await _updatePageTimestamp(stroke.pageId);
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to save stroke: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to save stroke'));
     }
   }
 
@@ -112,7 +112,7 @@ class InkLocalDataSource {
       }
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to save strokes: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to save strokes'));
     }
   }
 
@@ -121,7 +121,7 @@ class InkLocalDataSource {
       await (_db.delete(_db.inkStrokes)..where((s) => s.id.equals(strokeId))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to delete stroke: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to delete stroke'));
     }
   }
 
@@ -131,7 +131,7 @@ class InkLocalDataSource {
           .write(InkStrokesCompanion(isErased: Value(true)));
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to erase stroke: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to erase stroke'));
     }
   }
 
@@ -140,7 +140,7 @@ class InkLocalDataSource {
       await (_db.delete(_db.inkStrokes)..where((s) => s.pageId.equals(pageId))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to clear page: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to clear page'));
     }
   }
 
@@ -150,7 +150,7 @@ class InkLocalDataSource {
       await (_db.delete(_db.inkPages)..where((p) => p.id.equals(pageId))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to delete page: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to delete page'));
     }
   }
 
@@ -158,7 +158,7 @@ class InkLocalDataSource {
     try {
       return Result.success(await _getStrokesForPage(pageId));
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get strokes: $e'));
+      return Result.error(DatabaseFailure(message: 'Failed to get strokes'));
     }
   }
 

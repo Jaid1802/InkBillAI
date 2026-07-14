@@ -5,12 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseConfig {
   static final String _url = const String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'http://localhost:54321',
+    defaultValue: 'https://rzgeniuyavrljqkafwyn.supabase.co',
   );
 
   static final String _anonKey = const String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock',
+    defaultValue: 'sb_publishable_57GRPFwcgLw4l7qO1W-N6w_j3NpPGvE',
   );
 
   static SupabaseClient get client => Supabase.instance.client;
@@ -21,7 +21,7 @@ class SupabaseConfig {
       anonKey: _anonKey,
       debug: kDebugMode,
     );
-    debugPrint('Supabase initialized: $_url');
+    if (kDebugMode) debugPrint('Supabase initialized: $_url');
   }
 }
 
