@@ -217,6 +217,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     },
                     child: const Text("Don't have an account? Sign Up"),
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('or', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () {
+                      ref.read(authStateProvider.notifier).enableGuestMode();
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.grey.shade600,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text(
+                      'Continue without signing in',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
                 ],
               ),
             ),

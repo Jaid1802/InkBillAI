@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:inkbill_ai/core/supabase/supabase_config.dart';
 
 enum SyncStatus { idle, syncing, online, offline, error }
@@ -36,10 +36,10 @@ class SyncEngine {
 
     try {
       await Future.wait([
-        _syncCustomers(shopId),
-        _syncProducts(shopId),
-        _syncBills(shopId),
-        _syncInkDocuments(shopId),
+        syncCustomers(shopId),
+        syncProducts(shopId),
+        syncBills(shopId),
+        syncInkDocuments(shopId),
       ]);
 
       _retryCount = 0;
@@ -60,7 +60,7 @@ class SyncEngine {
           .from('customers')
           .select()
           .eq('shop_id', shopId)
-          .is_('deleted_at', null);
+          .isFilter('deleted_at', null);
       return data as List<Map<String, dynamic>>;
     } catch (e) {
       debugPrint('Sync customers error: [REDACTED]');
@@ -74,7 +74,7 @@ class SyncEngine {
           .from('products')
           .select()
           .eq('shop_id', shopId)
-          .is_('deleted_at', null);
+          .isFilter('deleted_at', null);
       return data as List<Map<String, dynamic>>;
     } catch (e) {
       debugPrint('Sync products error: [REDACTED]');
@@ -101,7 +101,7 @@ class SyncEngine {
           .from('ink_documents')
           .select()
           .eq('shop_id', shopId)
-          .is_('deleted_at', null);
+          .isFilter('deleted_at', null);
       return data as List<Map<String, dynamic>>;
     } catch (e) {
       debugPrint('Sync ink documents error: [REDACTED]');

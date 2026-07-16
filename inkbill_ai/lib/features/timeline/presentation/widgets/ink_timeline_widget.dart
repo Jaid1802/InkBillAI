@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inkbill_ai/features/handwriting/domain/entities/ink_stroke.dart';
 import 'package:inkbill_ai/features/timeline/presentation/providers/timeline_provider.dart';
 import 'package:inkbill_ai/services/ink_engine/ink_timeline.dart';
-import 'package:inkbill_ai/services/ink_engine/stroke_renderer.dart';
+import 'package:inkbill_ai/services/canvas_engine/canvas_renderer.dart';
 
 class InkTimelineWidget extends ConsumerStatefulWidget {
   final double width;
@@ -20,7 +20,7 @@ class InkTimelineWidget extends ConsumerStatefulWidget {
 }
 
 class _InkTimelineWidgetState extends ConsumerState<InkTimelineWidget> {
-  final StrokeRenderer _renderer = StrokeRenderer();
+  final CanvasRenderer _renderer = CanvasRenderer();
   List<InkStroke> _currentFrame = [];
 
   @override
@@ -120,7 +120,7 @@ class _PlayButton extends StatelessWidget {
 
 class _TimelinePainter extends CustomPainter {
   final List<InkStroke> strokes;
-  final StrokeRenderer renderer;
+  final CanvasRenderer renderer;
 
   _TimelinePainter({required this.strokes, required this.renderer});
 
@@ -128,7 +128,7 @@ class _TimelinePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.clipRect(Rect.fromLTWH(0, 0, size.width, size.height));
     for (final stroke in strokes) {
-      renderer.renderStrokeWithPressure(canvas, stroke);
+      renderer.renderStroke(canvas, stroke);
     }
   }
 

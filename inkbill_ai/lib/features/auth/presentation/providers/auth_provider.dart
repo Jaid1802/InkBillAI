@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider, AuthState, AuthUser;
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState, AuthUser;
 import 'package:inkbill_ai/core/supabase/supabase_config.dart';
 import 'package:inkbill_ai/features/auth/domain/entities/auth_user.dart';
 
@@ -248,6 +248,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void clearPendingVerification() {
     state = state.copyWith(pendingVerificationEmail: null);
+  }
+
+  void enableGuestMode() {
+    debugPrint('[AUTH_STATE] enableGuestMode');
+    state = AuthState(
+      isGuest: true,
+      user: const AuthUser(
+        id: 'guest-local-user',
+        fullName: 'Guest',
+        email: 'guest@inkbill.app',
+        role: 'guest',
+        shopId: '',
+      ),
+    );
+  }
+
+  void disableGuestMode() {
+    debugPrint('[AUTH_STATE] disableGuestMode');
+    state = const AuthState();
   }
 
   Future<void> _createProfileAndShop({

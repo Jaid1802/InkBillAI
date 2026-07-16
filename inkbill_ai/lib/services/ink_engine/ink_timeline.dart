@@ -11,7 +11,6 @@ class InkTimeline extends ValueNotifier<PlaybackState> {
   int _currentEventIndex = 0;
   Timer? _playbackTimer;
   double _playbackSpeed = 1.0;
-  int _baseTimestamp = 0;
 
   final StreamController<List<InkStroke>> _frameController =
       StreamController<List<InkStroke>>.broadcast();
@@ -84,7 +83,6 @@ class InkTimeline extends ValueNotifier<PlaybackState> {
     if (_events.isEmpty) return;
     _playbackSpeed = speed;
     _currentEventIndex = 0;
-    _baseTimestamp = _events.first.timestampMs;
 
     value = PlaybackState.playing;
 
@@ -117,10 +115,6 @@ class InkTimeline extends ValueNotifier<PlaybackState> {
   void _processEvent(InkTimelineEvent event, List<InkStroke> currentStrokes) {
     switch (event.type) {
       case TimelineEventType.strokeEnd:
-        final stroke = _strokes.firstWhere(
-          (s) => s.id == event.strokeId,
-          orElse: () => _strokes.last,
-        );
         _frameController.add([...currentStrokes.where((s) => !s.isErased)]);
         break;
       case TimelineEventType.strokeErase:

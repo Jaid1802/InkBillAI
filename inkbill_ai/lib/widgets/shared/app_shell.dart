@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inkbill_ai/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inkbill_ai/features/auth/presentation/pages/settings_page.dart';
+import 'package:inkbill_ai/features/auth/presentation/pages/debug_settings_page.dart';
 import 'package:inkbill_ai/features/billing/presentation/pages/billing_page.dart';
 import 'package:inkbill_ai/features/customers/presentation/pages/customers_page.dart';
 import 'package:inkbill_ai/features/products/presentation/pages/products_page.dart';
@@ -9,14 +10,22 @@ import 'package:inkbill_ai/features/reports/presentation/pages/dashboard_page.da
 import 'package:inkbill_ai/features/handwriting/presentation/pages/ink_page.dart';
 
 class AppShell extends ConsumerStatefulWidget {
-  const AppShell({super.key});
+  final int initialIndex;
+
+  const AppShell({super.key, this.initialIndex = 0});
 
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _currentIndex = 0;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+  }
 
   final List<Widget> _pages = [
     const DashboardPage(),
@@ -32,60 +41,167 @@ class _AppShellState extends ConsumerState<AppShell> {
     final shopName = authState.shop?.shopName ?? 'InkBill AI';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(shopName),
-        actions: [
-            PopupMenuButton<String>(
-            icon: const Icon(Icons.account_circle),
-            onSelected: (value) async {
-              if (value == 'settings') {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage()));
-              } else if (value == 'logout') {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Logout'),
-                    content: const Text('Are you sure you want to logout?'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                      TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Logout')),
-                    ],
-                  ),
-                );
-                if (confirm == true) {
-                  ref.read(authStateProvider.notifier).logout();
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'profile',
-                enabled: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(authState.user?.fullName ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text(authState.user?.email ?? '', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      appBar: _currentIndex == 2
+          ? null
+          : AppBar(
+              title: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                      child: Text(shopName,
+                          overflow: TextOverflow.ellipsis)),
+                  if (authState.isGuest) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade100,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'GUEST',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.account_circle),
+                  onSelected: (value) async {
+                    if (value == 'settings') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const SettingsPage()),
+                      );
+                    } else if (value == 'debug') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                const DebugSettingsPage()),
+                      );
+                    } else if (value == 'logout') {
+                      if (authState.isGuest) {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Exit Guest Mode'),
+                            content: const Text(
+                                'Exit guest mode and return to the sign in screen?'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(ctx, false),
+                                  child: const Text('Cancel')),
+                              TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(ctx, true),
+                                  child: const Text('Exit')),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          ref
+                              .read(authStateProvider.notifier)
+                              .disableGuestMode();
+                        }
+                      } else {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Logout'),
+                            content: const Text(
+                                'Are you sure you want to logout?'),
+                            actions: [
+                              TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(ctx, false),
+                                  child: const Text('Cancel')),
+                              TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(ctx, true),
+                                  child: const Text('Logout')),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          ref
+                              .read(authStateProvider.notifier)
+                              .logout();
+                        }
+                      }
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'profile',
+                      enabled: false,
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            authState.user?.fullName ?? '',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            authState.user?.email ?? '',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'settings',
+                      child: ListTile(
+                        leading: Icon(Icons.settings, size: 20),
+                        title: Text('Privacy & Security'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'debug',
+                      child: ListTile(
+                        leading: Icon(Icons.developer_mode,
+                            size: 20),
+                        title: Text('Debug Settings'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'logout',
+                      child: ListTile(
+                        leading: Icon(
+                          authState.isGuest
+                              ? Icons.person_off_outlined
+                              : Icons.logout,
+                          size: 20,
+                        ),
+                        title: Text(authState.isGuest
+                            ? 'Exit Guest Mode'
+                            : 'Logout'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: 'settings', child: ListTile(
-                leading: Icon(Icons.settings, size: 20),
-                title: Text('Privacy & Security'),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              )),
-              const PopupMenuItem(value: 'logout', child: ListTile(
-                leading: Icon(Icons.logout, size: 20),
-                title: Text('Logout'),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-              )),
-            ],
-          ),
-        ],
-      ),
+              ],
+            ),
       body: IndexedStack(
         index: _currentIndex,
         children: _pages,
@@ -97,9 +213,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
           ),
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),

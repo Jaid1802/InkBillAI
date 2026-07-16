@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
-import 'package:inkbill_ai/core/theme/app_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:inkbill_ai/core/supabase/supabase_config.dart';
 import 'package:inkbill_ai/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inkbill_ai/features/auth/presentation/pages/privacy_page.dart';
@@ -45,11 +44,12 @@ class SettingsPage extends ConsumerWidget {
           Card(
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.lock_outline),
-                  title: const Text('Change Password'),
-                  onTap: () => _changePassword(context, ref),
-                ),
+                if (!authState.isGuest)
+                  ListTile(
+                    leading: const Icon(Icons.lock_outline),
+                    title: const Text('Change Password'),
+                    onTap: () => _changePassword(context, ref),
+                  ),
               ],
             ),
           ),
@@ -93,18 +93,26 @@ class SettingsPage extends ConsumerWidget {
           Card(
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.logout),
-                  title: const Text('Sign Out'),
-                  onTap: () => _logout(context, ref),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  leading: const Icon(Icons.delete_forever, color: Colors.red),
-                  title: const Text('Delete Account', style: TextStyle(color: Colors.red)),
-                  subtitle: const Text('Permanently delete your account and all data'),
-                  onTap: () => _deleteAccount(context, ref),
-                ),
+                if (authState.isGuest)
+                  ListTile(
+                    leading: const Icon(Icons.person_off_outlined),
+                    title: const Text('Exit Guest Mode'),
+                    onTap: () => _logout(context, ref),
+                  )
+                else ...[
+                  ListTile(
+                    leading: const Icon(Icons.logout),
+                    title: const Text('Sign Out'),
+                    onTap: () => _logout(context, ref),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever, color: Colors.red),
+                    title: const Text('Delete Account', style: TextStyle(color: Colors.red)),
+                    subtitle: const Text('Permanently delete your account and all data'),
+                    onTap: () => _deleteAccount(context, ref),
+                  ),
+                ],
               ],
             ),
           ),
@@ -183,7 +191,17 @@ class SettingsPage extends ConsumerWidget {
   Future<void> _exportData(BuildContext context) async {
     final supabase = SupabaseConfig.client;
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data export requires a signed-in account.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
     String? shopId;
     try {
@@ -224,19 +242,37 @@ class SettingsPage extends ConsumerWidget {
   }
 
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign Out')),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      ref.read(authStateProvider.notifier).logout();
+    final authState = ref.read(authStateProvider);
+    if (authState.isGuest) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Exit Guest Mode'),
+          content: const Text('Exit guest mode and return to the sign in screen?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Exit')),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        ref.read(authStateProvider.notifier).disableGuestMode();
+      }
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Sign Out'),
+          content: const Text('Are you sure you want to sign out?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign Out')),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        ref.read(authStateProvider.notifier).logout();
+      }
     }
   }
 

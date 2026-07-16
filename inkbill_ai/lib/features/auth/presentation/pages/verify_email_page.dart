@@ -268,7 +268,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
                                   decoration: InputDecoration(
                                     counterText: '',
                                     filled: true,
-                                    fillColor: AppTheme.backgroundColor,
+                                    fillColor: AppTheme.surface,
                                     contentPadding: EdgeInsets.zero,
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
