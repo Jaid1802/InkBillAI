@@ -51,11 +51,12 @@ class BillingCalculator {
   }
 
   static Bill applyTaxRate(Bill bill, double taxRate) {
-    return calculate(bill.copyWith(taxRate: taxRate));
+    final clamped = taxRate < 0 ? 0.0 : (taxRate > 100 ? 100.0 : taxRate);
+    return calculate(bill.copyWith(taxRate: clamped));
   }
 
   static Bill applyDiscount(Bill bill, double discount) {
-    return calculate(bill.copyWith(discount: discount));
+    return calculate(bill.copyWith(discount: discount < 0 ? 0 : discount));
   }
 
   static double calculateSubtotal(List<BillItem> items) {

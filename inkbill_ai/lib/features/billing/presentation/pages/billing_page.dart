@@ -6,6 +6,10 @@ import 'package:inkbill_ai/features/billing/domain/entities/bill_item.dart';
 import 'package:inkbill_ai/features/billing/presentation/providers/billing_provider.dart';
 import 'package:inkbill_ai/features/customers/domain/entities/customer.dart';
 import 'package:inkbill_ai/features/customers/presentation/providers/customer_provider.dart';
+import 'package:inkbill_ai/services/receipt_generator/receipt_generator.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
 
 
 class BillingPage extends ConsumerWidget {
@@ -38,7 +42,7 @@ class BillingPage extends ConsumerWidget {
                 itemBuilder: (context, index) => _BillCard(bill: bills[index]),
               ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (_, __) => const Center(child: Text('Something went wrong. Please try again.')),
       ),
     );
   }
@@ -147,6 +151,7 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
       appBar: AppBar(
         title: Text(widget.existingBill != null ? 'Edit Bill' : 'New Bill'),
         actions: [
+          _buildPrintButton(editor, billState),
           _buildSaveButton(editor, billState),
         ],
       ),
@@ -208,6 +213,134 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
           Navigator.of(context).pop();
         }
       },
+    );
+  }
+
+  Widget _buildPrintButton(BillEditor editor, Bill bill) {
+    return IconButton(
+      icon: const Icon(Icons.print),
+      tooltip: 'Print bill',
+      onPressed: () async {
+        if (bill.items.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Check the bill items before printing.')),
+          );
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Saving bill before print...')),
+        );
+        final repo = ref.read(billingRepositoryProvider);
+
+        try {
+          if (widget.existingBill != null) {
+            await repo.updateBill(bill);
+          } else {
+            await repo.createBill(bill);
+          }
+          ref.invalidate(allBillsProvider);
+          ScaffoldMessenger.of(context).clearSnackBars();
+
+          final receiptData = ReceiptData.fromBill(bill);
+          await Printing.layoutPdf(
+            onLayout: (PdfPageFormat format) async {
+              final doc = pw.Document();
+              doc.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat.a4,
+                  margin: const pw.EdgeInsets.all(32),
+                  build: (pw.Context context) {
+                    return _buildPdfReceipt(receiptData);
+                  },
+                ),
+              );
+              return doc.save();
+            },
+            name: 'Bill_${bill.id}',
+          );
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Couldn't open the print flow. Please try again.")),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  pw.Widget _buildPdfReceipt(ReceiptData data) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Center(
+          child: pw.Column(
+            children: [
+              pw.Text(data.storeName, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+              if (data.storeAddress != null) pw.Text(data.storeAddress!, style: const pw.TextStyle(fontSize: 12)),
+              if (data.storePhone != null) pw.Text(data.storePhone!, style: const pw.TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 16),
+        pw.Divider(),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text('Bill #: ${data.billNumber}', style: const pw.TextStyle(fontSize: 11)),
+            pw.Text('Date: ${data.date.toIso8601String().substring(0, 10)}', style: const pw.TextStyle(fontSize: 11)),
+          ],
+        ),
+        if (data.customerName != null) pw.Text('Customer: ${data.customerName}', style: const pw.TextStyle(fontSize: 11)),
+        pw.SizedBox(height: 8),
+        pw.Divider(),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text('Item', style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+            pw.Text('Qty', style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+            pw.Text('Rate', style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+            pw.Text('Amount', style: const pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
+          ],
+        ),
+        pw.Divider(),
+        ...data.items.map((item) => pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 2),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(item.name.length > 20 ? '${item.name.substring(0, 20)}...' : item.name, style: const pw.TextStyle(fontSize: 10)),
+              pw.Text(item.quantity.toString(), style: const pw.TextStyle(fontSize: 10)),
+              pw.Text('${AppConstants.currencySymbol}${item.rate.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 10)),
+              pw.Text('${AppConstants.currencySymbol}${item.amount.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 10)),
+            ],
+          ),
+        )),
+        pw.Divider(),
+        pw.SizedBox(height: 8),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.end,
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text('Subtotal: ${AppConstants.currencySymbol}${data.subtotal.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                if (data.taxAmount > 0) pw.Text('Tax (${(data.taxRate * 100).toStringAsFixed(1)}%): ${AppConstants.currencySymbol}${data.taxAmount.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                if (data.discount > 0) pw.Text('Discount: -${AppConstants.currencySymbol}${data.discount.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
+                pw.SizedBox(height: 4),
+                pw.Text('TOTAL: ${AppConstants.currencySymbol}${data.total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
+        if (data.notes != null) ...[
+          pw.SizedBox(height: 16),
+          pw.Text(data.notes!, style: const pw.TextStyle(fontSize: 10)),
+        ],
+        pw.SizedBox(height: 24),
+        pw.Center(child: pw.Text('Thank you for your business!', style: const pw.TextStyle(fontSize: 11))),
+      ],
     );
   }
 

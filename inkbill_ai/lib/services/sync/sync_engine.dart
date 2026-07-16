@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:inkbill_ai/core/supabase/supabase_config.dart';
 
 enum SyncStatus { idle, syncing, online, offline, error }
@@ -36,16 +36,16 @@ class SyncEngine {
 
     try {
       await Future.wait([
-        _syncCustomers(shopId),
-        _syncProducts(shopId),
-        _syncBills(shopId),
-        _syncInkDocuments(shopId),
+        syncCustomers(shopId),
+        syncProducts(shopId),
+        syncBills(shopId),
+        syncInkDocuments(shopId),
       ]);
 
       _retryCount = 0;
       _updateStatus(SyncStatus.online);
     } catch (e) {
-      debugPrint('Sync failed: $e');
+      debugPrint('Sync failed: [REDACTED]');
       _retryCount++;
       _updateStatus(SyncStatus.error);
       _scheduleRetry(shopId);
@@ -60,10 +60,10 @@ class SyncEngine {
           .from('customers')
           .select()
           .eq('shop_id', shopId)
-          .is_('deleted_at', null);
+          .isFilter('deleted_at', null);
       return data as List<Map<String, dynamic>>;
     } catch (e) {
-      debugPrint('Sync customers error: $e');
+      debugPrint('Sync customers error: [REDACTED]');
       return [];
     }
   }
@@ -74,10 +74,10 @@ class SyncEngine {
           .from('products')
           .select()
           .eq('shop_id', shopId)
-          .is_('deleted_at', null);
+          .isFilter('deleted_at', null);
       return data as List<Map<String, dynamic>>;
     } catch (e) {
-      debugPrint('Sync products error: $e');
+      debugPrint('Sync products error: [REDACTED]');
       return [];
     }
   }
@@ -90,7 +90,7 @@ class SyncEngine {
           .eq('shop_id', shopId);
       return data as List<Map<String, dynamic>>;
     } catch (e) {
-      debugPrint('Sync bills error: $e');
+      debugPrint('Sync bills error: [REDACTED]');
       return [];
     }
   }
@@ -101,10 +101,10 @@ class SyncEngine {
           .from('ink_documents')
           .select()
           .eq('shop_id', shopId)
-          .is_('deleted_at', null);
+          .isFilter('deleted_at', null);
       return data as List<Map<String, dynamic>>;
     } catch (e) {
-      debugPrint('Sync ink documents error: $e');
+      debugPrint('Sync ink documents error: [REDACTED]');
       return [];
     }
   }
@@ -119,7 +119,7 @@ class SyncEngine {
           .single();
       return result as Map<String, dynamic>?;
     } catch (e) {
-      debugPrint('Push customer error: $e');
+      debugPrint('Push customer error: [REDACTED]');
       return null;
     }
   }
@@ -134,7 +134,7 @@ class SyncEngine {
           .single();
       return result as Map<String, dynamic>?;
     } catch (e) {
-      debugPrint('Push product error: $e');
+      debugPrint('Push product error: [REDACTED]');
       return null;
     }
   }
@@ -142,17 +142,17 @@ class SyncEngine {
   Future<Map<String, dynamic>?> pushBill(
       String shopId, Map<String, dynamic> bill, List<Map<String, dynamic>> items) async {
     try {
-      final result = await _supabase.from('bills').upsert(bill).select().single();
-      if (items.isNotEmpty) {
-        for (final item in items) {
-          item['shop_id'] = shopId;
-          item['bill_id'] = bill['id'];
-        }
-        await _supabase.from('bill_items').upsert(items);
+      for (final item in items) {
+        item['shop_id'] = shopId;
+        item['bill_id'] = bill['id'];
       }
+      final result = await _supabase.rpc('upsert_bill_with_items', params: {
+        'p_bill': bill,
+        'p_items': items,
+      });
       return result as Map<String, dynamic>?;
     } catch (e) {
-      debugPrint('Push bill error: $e');
+      debugPrint('Push bill error: [REDACTED]');
       return null;
     }
   }

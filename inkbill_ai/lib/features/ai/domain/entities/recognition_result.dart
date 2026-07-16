@@ -78,16 +78,19 @@ class BillStructureResult extends Equatable {
   final CustomerData? customerData;
   final double? total;
   final double confidence;
+  final List<String> warnings;
 
   const BillStructureResult({
     this.lineItems = const [],
     this.customerData,
     this.total,
     this.confidence = 0.0,
+    this.warnings = const [],
   });
 
   @override
-  List<Object?> get props => [lineItems, customerData, total, confidence];
+  List<Object?> get props =>
+      [lineItems, customerData, total, confidence, warnings];
 }
 
 class LineItemData extends Equatable {
@@ -96,6 +99,12 @@ class LineItemData extends Equatable {
   final double? rate;
   final double? amount;
   final double confidence;
+  final double nameConfidence;
+  final double quantityConfidence;
+  final double rateConfidence;
+  final bool isMissingQuantity;
+  final bool isMissingRate;
+  final bool amountMismatch;
 
   const LineItemData({
     this.name = '',
@@ -103,10 +112,28 @@ class LineItemData extends Equatable {
     this.rate,
     this.amount,
     this.confidence = 0.0,
+    this.nameConfidence = 0.0,
+    this.quantityConfidence = 0.0,
+    this.rateConfidence = 0.0,
+    this.isMissingQuantity = false,
+    this.isMissingRate = false,
+    this.amountMismatch = false,
   });
 
   @override
-  List<Object?> get props => [name, quantity, rate, amount, confidence];
+  List<Object?> get props => [
+        name,
+        quantity,
+        rate,
+        amount,
+        confidence,
+        nameConfidence,
+        quantityConfidence,
+        rateConfidence,
+        isMissingQuantity,
+        isMissingRate,
+        amountMismatch,
+      ];
 }
 
 class CustomerData extends Equatable {
@@ -118,4 +145,21 @@ class CustomerData extends Equatable {
 
   @override
   List<Object?> get props => [name, phone, gstin];
+}
+
+class ValidationIssueData extends Equatable {
+  final String field;
+  final String message;
+  final String severity;
+  final int? itemIndex;
+
+  const ValidationIssueData({
+    required this.field,
+    required this.message,
+    this.severity = 'warning',
+    this.itemIndex,
+  });
+
+  @override
+  List<Object?> get props => [field, message, severity, itemIndex];
 }

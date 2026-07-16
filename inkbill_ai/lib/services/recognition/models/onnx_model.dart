@@ -17,7 +17,7 @@ class OnnxRecognitionModel implements RecognitionModel {
       return Result.success(true);
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'ONNX init failed: $e'));
+          RecognitionFailure(message: 'ONNX init failed'));
     }
   }
 
@@ -38,7 +38,7 @@ class OnnxRecognitionModel implements RecognitionModel {
       ));
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'ONNX recognition failed: $e'));
+          RecognitionFailure(message: 'ONNX recognition failed'));
     }
   }
 

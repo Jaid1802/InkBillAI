@@ -37,6 +37,18 @@ class AppDatabase extends _$AppDatabase {
       onUpgrade: (Migrator m, int from, int to) async {},
     );
   }
+
+  Future<void> clearAllData() async {
+    await transaction(() async {
+      await delete(inkTimelineEvents).go();
+      await delete(inkStrokes).go();
+      await delete(inkPages).go();
+      await delete(billItems).go();
+      await delete(bills).go();
+      await delete(products).go();
+      await delete(customers).go();
+    });
+  }
 }
 
 LazyDatabase _openConnection() {

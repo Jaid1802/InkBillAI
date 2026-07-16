@@ -29,7 +29,7 @@ class CustomersPage extends ConsumerWidget {
                     _CustomerCard(customer: customers[index]),
               ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (_, __) => const Center(child: Text('Something went wrong. Please try again.')),
       ),
     );
   }
@@ -115,16 +115,19 @@ class _CustomerFormDialogState extends ConsumerState<_CustomerFormDialog> {
               TextFormField(
                 controller: _nameCtrl,
                 decoration: const InputDecoration(labelText: 'Name *'),
+                maxLength: 100,
                 validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
               ),
               TextFormField(
                 controller: _phoneCtrl,
                 decoration: const InputDecoration(labelText: 'Phone'),
                 keyboardType: TextInputType.phone,
+                maxLength: 20,
               ),
               TextFormField(
                 controller: _emailCtrl,
                 decoration: const InputDecoration(labelText: 'Email'),
+                maxLength: 254,
                 keyboardType: TextInputType.emailAddress,
               ),
               TextFormField(

@@ -5,6 +5,7 @@ import 'package:inkbill_ai/features/auth/presentation/providers/auth_provider.da
 import 'package:inkbill_ai/features/auth/presentation/pages/terms_page.dart';
 import 'package:inkbill_ai/features/auth/presentation/pages/privacy_page.dart';
 import 'login_page.dart';
+import 'verify_email_page.dart';
 
 class SignupPage extends ConsumerStatefulWidget {
   const SignupPage({super.key});
@@ -139,6 +140,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                     textInputAction: TextInputAction.next,
                     textCapitalization: TextCapitalization.words,
                     decoration: _inputDecoration('Shop Name', prefixIcon: const Icon(Icons.store_outlined)),
+                    maxLength: 100,
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Shop name is required';
                       return null;
@@ -150,6 +152,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
                     decoration: _inputDecoration('Email', prefixIcon: const Icon(Icons.email_outlined)),
+                    maxLength: 254,
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Email is required';
                       if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email';
@@ -162,6 +165,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                     keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
                     decoration: _inputDecoration('Phone Number', required: false, prefixIcon: const Icon(Icons.phone_outlined)),
+                    maxLength: 20,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -373,14 +377,25 @@ class _SignupPageState extends ConsumerState<SignupPage> {
           phone: _phoneCtrl.text.trim(),
         );
 
+    if (!mounted) return;
     setState(() => _isSubmitting = false);
 
-    if (error != null && mounted) {
+    if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(error),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final authState = ref.read(authStateProvider);
+    if (authState.pendingVerificationEmail != null) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => VerifyEmailPage(email: authState.pendingVerificationEmail!),
         ),
       );
     }

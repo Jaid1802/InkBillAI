@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
-import 'package:inkbill_ai/core/theme/app_theme.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:inkbill_ai/core/supabase/supabase_config.dart';
 import 'package:inkbill_ai/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inkbill_ai/features/auth/presentation/pages/privacy_page.dart';
+import 'package:inkbill_ai/core/database/database_provider.dart';
 import 'package:inkbill_ai/features/auth/presentation/pages/terms_page.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -44,11 +44,12 @@ class SettingsPage extends ConsumerWidget {
           Card(
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.lock_outline),
-                  title: const Text('Change Password'),
-                  onTap: () => _changePassword(context, ref),
-                ),
+                if (!authState.isGuest)
+                  ListTile(
+                    leading: const Icon(Icons.lock_outline),
+                    title: const Text('Change Password'),
+                    onTap: () => _changePassword(context, ref),
+                  ),
               ],
             ),
           ),
@@ -92,18 +93,26 @@ class SettingsPage extends ConsumerWidget {
           Card(
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.logout),
-                  title: const Text('Sign Out'),
-                  onTap: () => _logout(context, ref),
-                ),
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  leading: const Icon(Icons.delete_forever, color: Colors.red),
-                  title: const Text('Delete Account', style: TextStyle(color: Colors.red)),
-                  subtitle: const Text('Permanently delete your account and all data'),
-                  onTap: () => _deleteAccount(context, ref),
-                ),
+                if (authState.isGuest)
+                  ListTile(
+                    leading: const Icon(Icons.person_off_outlined),
+                    title: const Text('Exit Guest Mode'),
+                    onTap: () => _logout(context, ref),
+                  )
+                else ...[
+                  ListTile(
+                    leading: const Icon(Icons.logout),
+                    title: const Text('Sign Out'),
+                    onTap: () => _logout(context, ref),
+                  ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever, color: Colors.red),
+                    title: const Text('Delete Account', style: TextStyle(color: Colors.red)),
+                    subtitle: const Text('Permanently delete your account and all data'),
+                    onTap: () => _deleteAccount(context, ref),
+                  ),
+                ],
               ],
             ),
           ),
@@ -114,10 +123,8 @@ class SettingsPage extends ConsumerWidget {
   }
 
   Future<void> _changePassword(BuildContext context, WidgetRef ref) async {
-    final currentCtrl = TextEditingController();
     final newCtrl = TextEditingController();
     final confirmCtrl = TextEditingController();
-    bool obscureCurrent = true;
     bool obscureNew = true;
     bool obscureConfirm = true;
 
@@ -129,19 +136,8 @@ class SettingsPage extends ConsumerWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: currentCtrl,
-                obscureText: obscureCurrent,
-                decoration: InputDecoration(
-                  labelText: 'Current password',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: Icon(obscureCurrent ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setDialogState(() => obscureCurrent = !obscureCurrent),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
+              const Text('Enter your new password. You will be signed out after the update.'),
+              const SizedBox(height: 16),
               TextField(
                 controller: newCtrl,
                 obscureText: obscureNew,
@@ -187,7 +183,7 @@ class SettingsPage extends ConsumerWidget {
       if (error != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error), backgroundColor: Colors.red));
       } else if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated successfully.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password updated. Please sign in with your new password.')));
       }
     }
   }
@@ -195,46 +191,88 @@ class SettingsPage extends ConsumerWidget {
   Future<void> _exportData(BuildContext context) async {
     final supabase = SupabaseConfig.client;
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Data export requires a signed-in account.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
-    final shop = await supabase.from('shop_members').select('shop_id').eq('user_id', userId).maybeSingle();
-    final shopId = shop?['shop_id'] as String?;
+    String? shopId;
+    try {
+      final shop = await supabase.from('shop_members').select('shop_id').eq('user_id', userId).maybeSingle();
+      shopId = shop?['shop_id'] as String?;
+    } catch (_) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to load shop info')));
+      return;
+    }
     if (shopId == null) return;
 
+    if (!context.mounted) return;
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
 
-    final [customers, products, bills] = await Future.wait([
-      supabase.from('customers').select().eq('shop_id', shopId),
-      supabase.from('products').select().eq('shop_id', shopId),
-      supabase.from('bills').select().eq('shop_id', shopId),
-    ]);
+    try {
+      final [customers, products, bills] = await Future.wait([
+        supabase.from('customers').select().eq('shop_id', shopId),
+        supabase.from('products').select().eq('shop_id', shopId),
+        supabase.from('bills').select().eq('shop_id', shopId),
+      ]);
 
-    if (context.mounted) Navigator.pop(context);
+      if (context.mounted) Navigator.pop(context);
 
-    final exportData = {
-      'exportedAt': DateTime.now().toUtc().toIso8601String(),
-      'customers': customers,
-      'products': products,
-      'bills': bills,
-    };
+      final exportData = {
+        'exportedAt': DateTime.now().toUtc().toIso8601String(),
+        'customers': customers,
+        'products': products,
+        'bills': bills,
+      };
 
-    await Share.share(const JsonEncoder.withIndent('  ').convert(exportData), subject: 'InkBill Data Export');
+      await Share.share(const JsonEncoder.withIndent('  ').convert(exportData), subject: 'InkBill Data Export');
+    } catch (_) {
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Export failed. Please try again.'), backgroundColor: Colors.red));
+      }
+    }
   }
 
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign Out')),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      ref.read(authStateProvider.notifier).logout();
+    final authState = ref.read(authStateProvider);
+    if (authState.isGuest) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Exit Guest Mode'),
+          content: const Text('Exit guest mode and return to the sign in screen?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Exit')),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        ref.read(authStateProvider.notifier).disableGuestMode();
+      }
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Sign Out'),
+          content: const Text('Are you sure you want to sign out?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign Out')),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        ref.read(authStateProvider.notifier).logout();
+      }
     }
   }
 
@@ -251,11 +289,12 @@ class SettingsPage extends ConsumerWidget {
       ),
     );
     if (confirmed == true) {
-      final error = await ref.read(authStateProvider.notifier).deleteAccount();
+      final db = ref.read(databaseProvider);
+      final error = await ref.read(authStateProvider.notifier).deleteAccount(
+        onBeforeSignOut: () => db.clearAllData(),
+      );
       if (error != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error), backgroundColor: Colors.red));
-      } else if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account deleted.')));
       }
     }
   }

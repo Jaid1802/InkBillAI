@@ -29,7 +29,7 @@ class ProductsPage extends ConsumerWidget {
                     _ProductCard(product: products[index]),
               ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (_, __) => const Center(child: Text('Something went wrong. Please try again.')),
       ),
     );
   }

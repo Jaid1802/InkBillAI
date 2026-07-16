@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inkbill_ai/core/theme/app_theme.dart';
 import 'package:inkbill_ai/features/auth/presentation/providers/auth_provider.dart';
 import 'signup_page.dart';
+import 'verify_email_page.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -17,6 +18,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _passwordCtrl = TextEditingController();
   bool _obscurePassword = true;
   bool _isSubmitting = false;
+  bool _isResending = false;
 
   @override
   void dispose() {
@@ -50,6 +52,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final hasNetworkError = authState.error != null &&
         (authState.error!.contains('Unable to connect') ||
             authState.error!.contains('No internet'));
+    final isUnverified = authState.pendingVerificationEmail != null;
 
     return Scaffold(
       body: SafeArea(
@@ -116,22 +119,68 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.red.shade200),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              authState.error!,
-                              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  authState.error!,
+                                  style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                                ),
+                              ),
+                              if (hasNetworkError)
+                                TextButton(
+                                  onPressed: () {
+                                    ref.read(authStateProvider.notifier).clearError();
+                                    _submit();
+                                  },
+                                  child: const Text('Retry', style: TextStyle(fontSize: 12)),
+                                ),
+                            ],
                           ),
-                          if (hasNetworkError)
-                            TextButton(
-                              onPressed: () {
-                                ref.read(authStateProvider.notifier).clearError();
-                                _submit();
-                              },
-                              child: const Text('Retry', style: TextStyle(fontSize: 12)),
+                          if (isUnverified) ...[
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: () {
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(
+                                      builder: (_) => VerifyEmailPage(email: authState.pendingVerificationEmail!),
+                                    ),
+                                  );
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.primaryColor,
+                                  side: BorderSide(color: AppTheme.primaryColor),
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text('Verify email', style: TextStyle(fontSize: 13)),
+                              ),
                             ),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              width: double.infinity,
+                              child: TextButton(
+                                onPressed: _isResending ? null : _resendVerification,
+                                child: _isResending
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : Text(
+                                        'Resend verification code',
+                                        style: TextStyle(fontSize: 12, color: AppTheme.primaryColor),
+                                      ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -168,6 +217,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     },
                     child: const Text("Don't have an account? Sign Up"),
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('or', style: TextStyle(fontSize: 13, color: Colors.grey.shade500)),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () {
+                      ref.read(authStateProvider.notifier).enableGuestMode();
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.grey.shade600,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text(
+                      'Continue without signing in',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -187,6 +261,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           password: _passwordCtrl.text,
         );
 
+    if (!mounted) return;
     setState(() => _isSubmitting = false);
 
     if (error != null && mounted) {
@@ -198,5 +273,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ),
       );
     }
+  }
+
+  Future<void> _resendVerification() async {
+    final email = ref.read(authStateProvider).pendingVerificationEmail;
+    if (email == null || _isResending) return;
+
+    setState(() => _isResending = true);
+
+    final error = await ref.read(authStateProvider.notifier).resendOtp(email);
+
+    if (!mounted) return;
+    setState(() => _isResending = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(error ?? 'Verification code resent. Please check your email.'),
+        backgroundColor: error != null ? Colors.red.shade700 : AppTheme.successColor,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 }

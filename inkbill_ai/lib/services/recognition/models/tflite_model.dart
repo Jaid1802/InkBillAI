@@ -17,7 +17,7 @@ class TFLiteRecognitionModel implements RecognitionModel {
       return Result.success(true);
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'TFLite init failed: $e'));
+          RecognitionFailure(message: 'TFLite init failed'));
     }
   }
 
@@ -38,7 +38,7 @@ class TFLiteRecognitionModel implements RecognitionModel {
       ));
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'TFLite recognition failed: $e'));
+          RecognitionFailure(message: 'TFLite recognition failed'));
     }
   }
 

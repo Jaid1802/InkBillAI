@@ -30,7 +30,7 @@ class InkBillApp extends ConsumerWidget {
       );
     }
 
-    if (!authState.isAuthenticated) {
+    if (!authState.isAuthenticated && !authState.isGuest) {
       return const LoginPage();
     }
 

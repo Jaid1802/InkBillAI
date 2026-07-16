@@ -3,9 +3,12 @@
 -- Create private storage buckets
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
-  ('ink-documents', 'ink-documents', false, 52428800, null),
-  ('receipts', 'receipts', false, 10485760, null),
-  ('shop-assets', 'shop-assets', false, 5242880, null)
+  ('ink-documents', 'ink-documents', false, 52428800,
+   array['application/json', 'application/octet-stream', 'application/x-inkml']),
+  ('receipts', 'receipts', false, 10485760,
+   array['application/pdf', 'image/png', 'image/jpeg', 'image/webp']),
+  ('shop-assets', 'shop-assets', false, 5242880,
+   array['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])
 on conflict (id) do nothing;
 
 -- ============================================================
