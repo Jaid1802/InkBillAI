@@ -7,7 +7,7 @@ import 'package:inkbill_ai/features/billing/presentation/pages/billing_page.dart
 import 'package:inkbill_ai/features/customers/presentation/pages/customers_page.dart';
 import 'package:inkbill_ai/features/products/presentation/pages/products_page.dart';
 import 'package:inkbill_ai/features/reports/presentation/pages/dashboard_page.dart';
-import 'package:inkbill_ai/features/handwriting/presentation/pages/ink_page.dart';
+import 'package:inkbill_ai/features/ink/ui/canvas_screen/ink_canvas_screen.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   final int initialIndex;
@@ -30,7 +30,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   final List<Widget> _pages = [
     const DashboardPage(),
     const BillingPage(),
-    const InkNotePage(),
+    const SizedBox(),
     const CustomersPage(),
     const ProductsPage(),
   ];
@@ -209,7 +209,14 @@ class _AppShellState extends ConsumerState<AppShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (index) {
-          setState(() => _currentIndex = index);
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InkCanvasScreen()),
+            );
+          } else {
+            setState(() => _currentIndex = index);
+          }
         },
         destinations: const [
           NavigationDestination(

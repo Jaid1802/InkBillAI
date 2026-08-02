@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:inkbill_ai/core/utils/result.dart';
 import 'package:inkbill_ai/features/ai/domain/entities/recognition_result.dart';
@@ -32,7 +33,18 @@ class _MockRecognitionRepository extends RecognitionRepository {
   Future<Result<BillStructureResult>> extractBillStructure(
       List<InkStroke> strokes) async {
     return Result.success(const BillStructureResult(
-      lineItems: [LineItemData(name: 'Tea', quantity: 2, rate: 10, confidence: 0.8)],
+      lineItems: [LineItemData(name: 'Tea', quantity: 1, rate: 10, amount: 10)],
+      rawText: 'Tea 1 10',
+      confidence: 0.8,
+    ));
+  }
+
+  @override
+  Future<Result<BillStructureResult>> extractBillStructureFromImage(
+      Uint8List imageBytes) async {
+    return Result.success(const BillStructureResult(
+      lineItems: [LineItemData(name: 'Tea', quantity: 1, rate: 10, amount: 10)],
+      rawText: 'Tea 1 10',
       confidence: 0.8,
     ));
   }

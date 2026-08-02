@@ -4,7 +4,9 @@ import 'package:inkbill_ai/features/handwriting/domain/entities/ink_point.dart';
 import 'package:inkbill_ai/features/handwriting/domain/entities/ink_stroke.dart';
 
 enum CanvasMode { draw, erase }
+enum EraseMode { stroke, pixel }
 enum CanvasBackground { blank, ruled, grid }
+enum InputMode { finger, stylus }
 
 class CanvasEngine extends ValueNotifier<CanvasState> {
   final String pageId;
@@ -62,11 +64,20 @@ class CanvasEngine extends ValueNotifier<CanvasState> {
       pageId: pageId,
       points: [point],
       color: value.penColor,
-      width: value.penWidth,
+      width: value.penWidth * value.penOpacity, // Or apply opacity as alpha to color. Let's do it via color.
       createdAt: DateTime.now(),
     );
 
-    value = value.copyWith(currentStroke: stroke);
+    // Apply opacity to color
+    int r = (value.penColor >> 16) & 0xFF;
+    int g = (value.penColor >> 8) & 0xFF;
+    int b = value.penColor & 0xFF;
+    int a = (value.penOpacity * 255).round();
+    int finalColor = (a << 24) | (r << 16) | (g << 8) | b;
+
+    final adjustedStroke = stroke.copyWith(color: finalColor, width: value.penWidth);
+    
+    value = value.copyWith(currentStroke: adjustedStroke);
   }
 
   void updateStroke(
@@ -162,11 +173,59 @@ class CanvasEngine extends ValueNotifier<CanvasState> {
     }
   }
 
+  void setEraseMode(EraseMode mode) => value = value.copyWith(eraseMode: mode);
+
   void eraseAt(double x, double y, {int pointerId = 0}) {
     if (value.mode != CanvasMode.erase) return;
     if (_pointerId < 0) _pointerId = pointerId;
     if (pointerId != _pointerId) return;
 
+    if (value.eraseMode == EraseMode.stroke) {
+      _eraseStrokeAt(x, y);
+    } else {
+      _erasePixelAt(x, y);
+    }
+  }
+
+  void _eraseStrokeAt(double x, double y) {
+    final es = value.eraserSize;
+    final esSq = es * es;
+
+    final List<InkStroke> erased = [];
+    final List<InkStroke> surviving = [];
+
+    for (final stroke in value.strokes) {
+      bool hit = false;
+      for (final p in stroke.points) {
+        final dx = p.x - x;
+        final dy = p.y - y;
+        if (dx * dx + dy * dy <= esSq) {
+          hit = true;
+          break;
+        }
+      }
+      if (hit) {
+        erased.add(stroke);
+      } else {
+        surviving.add(stroke);
+      }
+    }
+
+    if (erased.isEmpty) return;
+
+    value = value.copyWith(strokes: surviving);
+
+    _undoStack.add(CanvasAction(
+      type: CanvasActionType.erase,
+      erased: erased,
+      restored: [...erased],
+    ));
+    _redoStack.clear();
+    _syncUndoRedo();
+    onAutoSave?.call();
+  }
+
+  void _erasePixelAt(double x, double y) {
     final es = value.eraserSize / 2;
     final esSq = es * es;
 
@@ -194,8 +253,7 @@ class CanvasEngine extends ValueNotifier<CanvasState> {
         if (kept.length >= 2) {
           int startIdx = 0;
           for (var i = 0; i < kept.length; i++) {
-            if (i == kept.length - 1 ||
-                kept[i + 1].x - kept[i].x > 20) {
+            if (i == kept.length - 1 || kept[i + 1].x - kept[i].x > 20) {
               final segment = kept.sublist(startIdx, i + 1);
               if (segment.length >= 2) {
                 partials.add(stroke.copyWith(
@@ -325,8 +383,10 @@ class CanvasEngine extends ValueNotifier<CanvasState> {
 
   void setPenWidth(double w) => value = value.copyWith(penWidth: w);
   void setPenColor(int c) => value = value.copyWith(penColor: c);
+  void setPenOpacity(double o) => value = value.copyWith(penOpacity: o);
   void setEraserSize(double s) => value = value.copyWith(eraserSize: s);
   void setBackground(CanvasBackground bg) => value = value.copyWith(background: bg);
+  void setInputMode(InputMode mode) => value = value.copyWith(inputMode: mode);
 
   void loadStrokes(List<InkStroke> strokes) {
     value = value.copyWith(strokes: strokes);
@@ -367,10 +427,13 @@ class CanvasState {
   final InkStroke? currentStroke;
   final List<InkStroke> strokes;
   final CanvasMode mode;
+  final EraseMode eraseMode;
   final double penWidth;
   final int penColor;
+  final double penOpacity;
   final double eraserSize;
   final CanvasBackground background;
+  final InputMode inputMode;
   final double canvasWidth;
   final double canvasHeight;
   final bool canUndo;
@@ -381,10 +444,13 @@ class CanvasState {
     this.currentStroke,
     this.strokes = const [],
     this.mode = CanvasMode.draw,
+    this.eraseMode = EraseMode.stroke,
     this.penWidth = 3.0,
     this.penColor = 0xFF212121,
+    this.penOpacity = 1.0,
     this.eraserSize = 40.0,
-    this.background = CanvasBackground.ruled,
+    this.background = CanvasBackground.blank,
+    this.inputMode = InputMode.finger,
     this.canvasWidth = 800,
     this.canvasHeight = 2000,
     this.canUndo = false,
@@ -395,10 +461,13 @@ class CanvasState {
     Object? currentStroke = _null,
     List<InkStroke>? strokes,
     CanvasMode? mode,
+    EraseMode? eraseMode,
     double? penWidth,
     int? penColor,
+    double? penOpacity,
     double? eraserSize,
     CanvasBackground? background,
+    InputMode? inputMode,
     double? canvasWidth,
     double? canvasHeight,
     bool? canUndo,
@@ -410,10 +479,13 @@ class CanvasState {
           : currentStroke as InkStroke?,
       strokes: strokes ?? this.strokes,
       mode: mode ?? this.mode,
+      eraseMode: eraseMode ?? this.eraseMode,
       penWidth: penWidth ?? this.penWidth,
       penColor: penColor ?? this.penColor,
+      penOpacity: penOpacity ?? this.penOpacity,
       eraserSize: eraserSize ?? this.eraserSize,
       background: background ?? this.background,
+      inputMode: inputMode ?? this.inputMode,
       canvasWidth: canvasWidth ?? this.canvasWidth,
       canvasHeight: canvasHeight ?? this.canvasHeight,
       canUndo: canUndo ?? this.canUndo,

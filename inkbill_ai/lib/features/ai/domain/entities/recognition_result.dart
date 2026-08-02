@@ -73,12 +73,48 @@ class DetectedCell extends Equatable {
   List<Object?> get props => [text, fieldType, x, y, width, height];
 }
 
+enum OcrDiagnosticCategory {
+  none,
+  noStrokes,
+  exportFailed,
+  emptyExportedImage,
+  imageDecodeFailed,
+  preprocessingFailed,
+  noTextRegions,
+  modelNotLoaded,
+  modelInitializationFailed,
+  modelInferenceFailed,
+  ocrReturnedZeroBlocks,
+  ocrReturnedEmptyText,
+  noRawText,
+  lowConfidence,
+  parserFailed,
+  timeout,
+}
+
 class BillStructureResult extends Equatable {
   final List<LineItemData> lineItems;
   final CustomerData? customerData;
   final double? total;
   final double confidence;
   final List<String> warnings;
+  final String rawText;
+  final OcrDiagnosticCategory diagnosticCategory;
+  final String? failureCode;
+  final double nonWhitePixelPercentage;
+  final double brightnessPercentage;
+  final String? debugOriginalPath;
+  final String? debugPreprocessedPath;
+  final String? debugThresholdPath;
+  final String? debugFinalInputPath;
+  final String? debugDetectedRegionsPath;
+  final List<String> detectedLines;
+  final String recognizerName;
+  final int blocksCount;
+  final int linesCount;
+  final int wordsCount;
+  final int imageWidth;
+  final int imageHeight;
 
   const BillStructureResult({
     this.lineItems = const [],
@@ -86,11 +122,50 @@ class BillStructureResult extends Equatable {
     this.total,
     this.confidence = 0.0,
     this.warnings = const [],
+    this.rawText = '',
+    this.diagnosticCategory = OcrDiagnosticCategory.none,
+    this.failureCode,
+    this.nonWhitePixelPercentage = 0.0,
+    this.brightnessPercentage = 0.0,
+    this.debugOriginalPath,
+    this.debugPreprocessedPath,
+    this.debugThresholdPath,
+    this.debugFinalInputPath,
+    this.debugDetectedRegionsPath,
+    this.detectedLines = const [],
+    this.recognizerName = 'Google ML Kit',
+    this.blocksCount = 0,
+    this.linesCount = 0,
+    this.wordsCount = 0,
+    this.imageWidth = 0,
+    this.imageHeight = 0,
   });
 
   @override
-  List<Object?> get props =>
-      [lineItems, customerData, total, confidence, warnings];
+  List<Object?> get props => [
+        lineItems,
+        customerData,
+        total,
+        confidence,
+        warnings,
+        rawText,
+        diagnosticCategory,
+        failureCode,
+        nonWhitePixelPercentage,
+        brightnessPercentage,
+        debugOriginalPath,
+        debugPreprocessedPath,
+        debugThresholdPath,
+        debugFinalInputPath,
+        debugDetectedRegionsPath,
+        detectedLines,
+        recognizerName,
+        blocksCount,
+        linesCount,
+        wordsCount,
+        imageWidth,
+        imageHeight,
+      ];
 }
 
 class LineItemData extends Equatable {

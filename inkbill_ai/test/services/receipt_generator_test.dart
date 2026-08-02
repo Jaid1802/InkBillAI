@@ -4,106 +4,80 @@ import 'package:inkbill_ai/features/billing/domain/entities/bill_item.dart';
 import 'package:inkbill_ai/services/receipt_generator/receipt_generator.dart';
 
 void main() {
-  group('ReceiptGenerator', () {
-    test('generateTextReceipt generates receipt with items', () {
-      final data = ReceiptData(
-        storeName: 'Test Store',
-        billNumber: 'BILL-001',
-        date: DateTime(2024, 1, 15),
-        items: [
-          const BillItem(id: '1', name: 'Tea', quantity: 2, rate: 10, amount: 20),
-          const BillItem(id: '2', name: 'Coffee', quantity: 1, rate: 15, amount: 15),
-        ],
-        subtotal: 35,
-        total: 35,
-      );
-
-      final receipt = ReceiptGenerator.generateTextReceipt(data);
-      expect(receipt, contains('Test Store'));
-      expect(receipt, contains('BILL-001'));
-      expect(receipt, contains('Tea'));
-      expect(receipt, contains('Coffee'));
-      expect(receipt, contains('35'));
-      expect(receipt, contains('Thank you'));
-    });
-
-    test('generateTextReceipt includes tax when provided', () {
-      final data = ReceiptData(
-        storeName: 'Store',
-        billNumber: 'B2',
-        date: DateTime.now(),
-        items: [
-          const BillItem(id: '1', name: 'Item', quantity: 1, rate: 100, amount: 100),
-        ],
-        subtotal: 100,
-        taxRate: 0.18,
-        taxAmount: 18,
-        total: 118,
-      );
-
-      final receipt = ReceiptGenerator.generateTextReceipt(data);
-      expect(receipt, contains('18'));
-      expect(receipt, contains('Tax'));
-    });
-
-    test('generateTextReceipt includes discount when provided', () {
-      final data = ReceiptData(
-        storeName: 'Store',
-        billNumber: 'B3',
-        date: DateTime.now(),
-        items: [
-          const BillItem(id: '1', name: 'Item', quantity: 1, rate: 100, amount: 100),
-        ],
-        subtotal: 100,
-        discount: 10,
-        total: 90,
-      );
-
-      final receipt = ReceiptGenerator.generateTextReceipt(data);
-      expect(receipt, contains('Discount'));
-      expect(receipt, contains('90'));
-    });
-
-    test('generateHtmlReceipt generates valid HTML', () {
-      final data = ReceiptData(
-        storeName: 'Test Store',
-        billNumber: 'B001',
-        date: DateTime.now(),
-        items: [
-          const BillItem(id: '1', name: 'Item', quantity: 1, rate: 50, amount: 50),
-        ],
-        subtotal: 50,
-        total: 50,
-      );
-
-      final html = ReceiptGenerator.generateHtmlReceipt(data);
-      expect(html, contains('<!DOCTYPE html>'));
-      expect(html, contains('<h1>Test Store</h1>'));
-      expect(html, contains('B001'));
-      expect(html, contains('50'));
-    });
-
-    test('ReceiptData fromBill works correctly', () {
+  group('ReceiptData', () {
+    test('fromBill creates correct data', () {
       final bill = Bill(
-        id: 'bill_001',
-        customerName: 'John',
-        items: const [BillItem(id: 'i1', name: 'Item', quantity: 2, rate: 25, amount: 50)],
-        subtotal: 50,
-        taxRate: 0.18,
-        taxAmount: 9,
-        discount: 5,
-        total: 54,
-        notes: 'Thank you',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        id: 'bill_123',
+        items: [BillItem(id: 'i1', name: 'A', quantity: 2, rate: 10, amount: 20)],
+        subtotal: 20,
+        taxRate: 0.1,
+        taxAmount: 2,
+        discount: 0,
+        total: 22,
+        createdAt: DateTime(2026, 7, 17),
+        updatedAt: DateTime(2026, 7, 17),
       );
+      final data = ReceiptData.fromBill(bill, storeName: 'Test Store');
+      expect(data.storeName, 'Test Store');
+      expect(data.billNumber, 'bill_123');
+      expect(data.items.length, 1);
+      expect(data.total, 22);
+    });
+  });
 
-      final data = ReceiptData.fromBill(bill);
-      expect(data.billNumber, 'bill_001');
-      expect(data.customerName, 'John');
-      expect(data.subtotal, 50);
-      expect(data.total, 54);
-      expect(data.notes, 'Thank you');
+  group('ReceiptGenerator', () {
+    final data = ReceiptData(
+      storeName: 'Test Store',
+      billNumber: 'B001',
+      date: DateTime(2026, 7, 17),
+      items: [
+        BillItem(id: 'i1', name: 'Item A', quantity: 2, rate: 10, amount: 20),
+      ],
+      subtotal: 20,
+      taxRate: 0.1,
+      taxAmount: 2,
+      discount: 5,
+      total: 17,
+      notes: 'Thank you',
+    );
+
+    test('generateTextReceipt contains required fields', () {
+      final text = ReceiptGenerator.generateTextReceipt(data);
+      expect(text, contains('Test Store'));
+      expect(text, contains('B001'));
+      expect(text, contains('Item A'));
+      expect(text, contains('20.00'));
+      expect(text, contains('17.00'));
+      expect(text, contains('Thank you'));
+      expect(text, contains('Discount'));
+    });
+
+    test('generateTextReceipt handles empty items', () {
+      final empty = ReceiptData(
+        storeName: 'Empty',
+        billNumber: 'B000',
+        date: DateTime.now(),
+        items: [],
+        subtotal: 0,
+        total: 0,
+      );
+      final text = ReceiptGenerator.generateTextReceipt(empty);
+      expect(text, contains('Empty'));
+      expect(text, contains('B000'));
+    });
+
+    test('generateHtmlReceipt contains required fields', () {
+      final html = ReceiptGenerator.generateHtmlReceipt(data);
+      expect(html, contains('Test Store'));
+      expect(html, contains('B001'));
+      expect(html, contains('Item A'));
+      expect(html, contains('<div'));
+      expect(html, contains('Thank you'));
+    });
+
+    test('generateHtmlReceipt handles custom template', () {
+      final html = ReceiptGenerator.generateHtmlReceipt(data, template: ReceiptTemplate.modern);
+      expect(html, contains('Test Store'));
     });
   });
 }

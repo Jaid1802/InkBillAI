@@ -1,0 +1,25 @@
+{
+  "samples": {
+    "english_1.png": {
+      "language": "english",
+      "lines": [
+        {"text": "Apple 2 50", "name": "Apple", "qty": 2, "rate": 50},
+        {"text": "Milk 3 30", "name": "Milk", "qty": 3, "rate": 30}
+      ]
+    },
+    "hindi_1.png": {
+      "language": "hindi",
+      "lines": [
+        {"text": "साखर 2 45", "name": "साखर", "qty": 2, "rate": 45},
+        {"text": "दूध 3 30", "name": "दूध", "qty": 3, "rate": 30}
+      ]
+    },
+    "mixed_1.png": {
+      "language": "mixed",
+      "lines": [
+        {"text": "Apple 2 120", "name": "Apple", "qty": 2, "rate": 120},
+        {"text": "तेल 1 150", "name": "तेल", "qty": 1, "rate": 150}
+      ]
+    }
+  }
+}

@@ -1,17 +1,24 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart' as mlkit;
+import 'package:path_provider/path_provider.dart';
 import 'package:image/image.dart' as img;
 import 'package:inkbill_ai/core/utils/result.dart';
 import 'package:inkbill_ai/core/errors/failures.dart';
 import 'package:inkbill_ai/features/ai/domain/entities/recognition_result.dart';
-import 'package:inkbill_ai/features/handwriting/domain/entities/ink_point.dart';
 import 'package:inkbill_ai/features/handwriting/domain/entities/ink_stroke.dart';
-import 'package:inkbill_ai/services/recognition/image_preprocessor.dart';
+import 'package:inkbill_ai/services/handwriting/handwriting_engine.dart';
+import 'package:inkbill_ai/services/handwriting/models/handwriting_line.dart';
+import 'package:inkbill_ai/services/recognition/recognition_logger.dart';
 
 class RecognitionLocalDataSource {
-  final ImagePreprocessor _preprocessor = ImagePreprocessor();
+  final HandwritingEngine _handwritingEngine;
+  mlkit.TextRecognizer? _cachedTextRecognizer;
+  bool _textRecognizerInitialized = false;
 
-  // Common bill item dictionary for context-aware correction
   static const _knownItems = <String>{
     'tea', 'chai', 'coffee', 'milk', 'bread', 'butter', 'eggs', 'sugar',
     'rice', 'wheat', 'daal', 'pulses', 'oil', 'salt', 'spices', 'turmeric',
@@ -21,81 +28,90 @@ class RecognitionLocalDataSource {
     'honey', 'jam', 'pickle', 'papad', 'chips', 'namkeen',
   };
 
-  static final _quantityPatterns = [
-    RegExp(r'(\d+)\s*kg'),
-    RegExp(r'(\d+)\s*g'),
-    RegExp(r'(\d+)\s*l'),
-    RegExp(r'(\d+)\s*ml'),
-    RegExp(r'(\d+)\s*pcs'),
-    RegExp(r'(\d+)\s*pack'),
-    RegExp(r'^(\d+)$'),
-  ];
+  static const Duration _strokeRecognitionTimeout = Duration(seconds: 10);
+  static const Duration _imageOcrTimeout = Duration(seconds: 10);
 
-  static final _ratePatterns = [
-    RegExp(r'[@]\s*(\d+)'),
-    RegExp(r'(\d+)\s*/-'),
-    RegExp(r'Rs\.?\s*(\d+)'),
-    RegExp(r'₹\s*(\d+)'),
-    RegExp(r'(\d+)\s*$'),
-  ];
+  RecognitionLocalDataSource({HandwritingEngine? handwritingEngine})
+      : _handwritingEngine =
+            handwritingEngine ?? HandwritingEngine();
+
+  Future<mlkit.TextRecognizer> _getTextRecognizer() {
+    if (_cachedTextRecognizer == null || !_textRecognizerInitialized) {
+      _cachedTextRecognizer?.close();
+      _cachedTextRecognizer =
+          mlkit.TextRecognizer(script: mlkit.TextRecognitionScript.latin);
+      _textRecognizerInitialized = true;
+    }
+    return Future.value(_cachedTextRecognizer);
+  }
+
+  void _disposeTextRecognizer() {
+    if (_cachedTextRecognizer != null) {
+      try {
+        _cachedTextRecognizer!.close();
+      } catch (_) {}
+      _cachedTextRecognizer = null;
+      _textRecognizerInitialized = false;
+    }
+  }
+
+  Future<Result<bool>> initializeEngine() async {
+    return _handwritingEngine.initialize();
+  }
 
   Future<Result<RecognitionResult>> recognizeStrokes(
       List<InkStroke> strokes) async {
     try {
-      final text = await _runLocalRecognition(strokes);
+      final engineResult = await _handwritingEngine
+          .recognize(strokes, timeout: _strokeRecognitionTimeout);
+      final rawText = _handwritingEngine.toRawText(engineResult.recognition);
+
+      final candidates = <RecognizedText>[];
+      for (final line in engineResult.recognition.lines) {
+        for (final field in line.fields) {
+          if (field.text.isNotEmpty) {
+            candidates.add(RecognizedText(
+              text: field.text,
+              confidence: field.confidence,
+            ));
+          }
+        }
+      }
+
       return Result.success(RecognitionResult(
-        candidates: [RecognizedText(text: text, confidence: 0.6)],
-        bestText: text,
-        confidence: 0.6,
+        candidates: candidates,
+        bestText: rawText.isNotEmpty ? rawText : null,
+        confidence: engineResult.recognition.overallConfidence,
       ));
+    } on TimeoutException {
+      return Result.error(const RecognitionFailure(
+          message: 'Handwriting recognition timed out'));
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'Local recognition failed'));
+          RecognitionFailure(message: 'Handwriting recognition failed: $e'));
     }
-  }
-
-  Future<String> _runLocalRecognition(List<InkStroke> strokes) async {
-    if (strokes.isEmpty) return '';
-    final points = strokes.expand((s) => s.points).toList();
-    if (points.isEmpty) return '';
-
-    final bounds = _calculateBounds(strokes);
-    final width = bounds['width'] as double;
-    final height = bounds['height'] as double;
-
-    // Group strokes into rows by Y position
-    final rows = _groupIntoRows(strokes);
-
-    final result = StringBuffer();
-    for (final row in rows) {
-      if (result.isNotEmpty) result.write('\n');
-
-      // Process each region in the row
-      for (final regionStroke in row) {
-        final text = _recognizeRegion(regionStroke);
-        result.write(text);
-      }
-    }
-
-    return result.toString().trim();
   }
 
   Future<Result<LayoutRecognitionResult>> detectLayout(
       List<InkStroke> strokes) async {
     try {
-      final rows = _groupIntoRows(strokes);
+      final engineResult = await _handwritingEngine
+          .recognize(strokes, timeout: _strokeRecognitionTimeout);
       final detectedRows = <DetectedRow>[];
-      for (final row in rows) {
+
+      for (final line in engineResult.recognition.lines) {
         final cells = <DetectedCell>[];
-        for (final stroke in row) {
-          final bounds = _strokeBounds(stroke);
+        for (final field in line.fields) {
           cells.add(DetectedCell(
-            text: RecognitionResult(confidence: 0.5),
-            fieldType: _classifyRegion(stroke),
-            x: bounds['minX'] as double,
-            y: bounds['minY'] as double,
-            width: bounds['width'] as double,
-            height: bounds['height'] as double,
+            text: RecognitionResult(
+              confidence: field.confidence,
+              bestText: field.text,
+            ),
+            fieldType: field.type == FieldType.number ? 'number' : 'word',
+            x: field.x,
+            y: field.y,
+            width: field.width,
+            height: field.height,
           ));
         }
         detectedRows.add(DetectedRow(cells: cells));
@@ -103,286 +119,355 @@ class RecognitionLocalDataSource {
 
       return Result.success(LayoutRecognitionResult(
         rows: detectedRows,
-        confidence: 0.7,
+        confidence: engineResult.recognition.overallConfidence,
       ));
+    } on TimeoutException {
+      return Result.error(const RecognitionFailure(
+          message: 'Layout detection timed out'));
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'Layout detection failed'));
+          RecognitionFailure(message: 'Layout detection failed: $e'));
     }
   }
 
   Future<Result<BillStructureResult>> extractBillStructure(
       List<InkStroke> strokes) async {
     try {
-      const expectedConfidence = 0.6;
-
-      final rows = _groupIntoRows(strokes);
+      final engineResult = await _handwritingEngine
+          .recognize(strokes, timeout: _strokeRecognitionTimeout);
       final lineItems = <LineItemData>[];
 
-      for (final row in rows) {
+      for (final line in engineResult.recognition.lines) {
         String itemName = '';
         double? quantity;
         double? rate;
+        double nameConf = 0.0;
+        double qtyConf = 0.0;
+        double rateConf = 0.0;
 
-        for (final stroke in row) {
-          final text = _recognizeRegion(stroke);
-          final region = _classifyRegion(stroke);
+        if (line.fields.isEmpty) continue;
 
-          switch (region) {
-            case 'item':
-              itemName = _correctItemName(text);
-              break;
-            case 'quantity':
-              quantity = _extractQuantity(text);
-              break;
-            case 'rate':
-              rate = _extractRate(text);
-              break;
+        final words = line.fields
+            .where((f) => f.type == FieldType.word && f.text.isNotEmpty)
+            .toList();
+        final numbers = line.fields
+            .where((f) => f.type == FieldType.number && f.text.isNotEmpty)
+            .toList();
+
+        if (words.isNotEmpty) {
+          itemName = _correctItemName(
+              words.map((w) => w.text).join(' '));
+          nameConf = words
+              .map((w) => w.confidence)
+              .reduce((a, b) => a < b ? a : b);
+        }
+
+        for (final numField in numbers) {
+          final value = double.tryParse(numField.text);
+          if (value == null) continue;
+
+          if (_looksLikeQuantity(value, numField.text)) {
+            quantity = value;
+            qtyConf = numField.confidence;
+          } else if (rate == null) {
+            rate = value;
+            rateConf = numField.confidence;
           }
         }
 
+        if (words.isEmpty && numbers.isNotEmpty) {
+          itemName = numbers.first.text;
+          nameConf = numbers.first.confidence;
+        }
+
         if (itemName.isNotEmpty || quantity != null || rate != null) {
+          final amount = (quantity ?? 0) * (rate ?? 0);
           lineItems.add(LineItemData(
             name: itemName,
             quantity: quantity,
             rate: rate,
-            amount: (quantity ?? 0) * (rate ?? 0),
-            confidence: expectedConfidence,
+            amount: amount > 0 ? amount : null,
+            confidence: (nameConf + qtyConf + rateConf) / 3.0,
+            nameConfidence: nameConf,
+            quantityConfidence: qtyConf,
+            rateConfidence: rateConf,
+            isMissingQuantity: quantity == null && rate != null,
+            isMissingRate: rate == null && quantity != null,
           ));
         }
       }
 
       return Result.success(BillStructureResult(
         lineItems: lineItems,
-        confidence: expectedConfidence,
+        confidence: engineResult.recognition.overallConfidence,
+        warnings: engineResult.recognition.warnings,
       ));
+    } on TimeoutException {
+      return Result.error(const RecognitionFailure(
+          message: 'Bill structure extraction timed out'));
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'Structure extraction failed'));
+          RecognitionFailure(message: 'Structure extraction failed: $e'));
+    }
+  }
+
+  Future<Result<BillStructureResult>> extractBillStructureFromImage(
+      Uint8List imageBytes) async {
+    File? tempOriginalFile;
+    File? tempPreprocessedFile;
+    File? tempThresholdFile;
+    File? tempFinalInputFile;
+
+    try {
+      RecognitionLogger.stage('IMAGE_OCR', '==========================\nOCR PIPELINE START\n==========================');
+      RecognitionLogger.log('Received PNG Bytes: ${imageBytes.lengthInBytes}');
+
+      // TASK 2: Verify Image Decoding
+      final img.Image? decoded = img.decodePng(imageBytes);
+      if (decoded == null) {
+        RecognitionLogger.error('IMAGE_OCR', 'IMAGE_DECODE_FAILED: img.decodePng returned null');
+        return Result.success(const BillStructureResult(
+          diagnosticCategory: OcrDiagnosticCategory.imageDecodeFailed,
+          failureCode: 'IMAGE_DECODE_FAILED',
+          warnings: ['IMAGE_DECODE_FAILED: Could not decode raw PNG bytes.'],
+        ));
+      }
+
+      final w = decoded.width;
+      final h = decoded.height;
+      final numChannels = decoded.numChannels;
+      final hasAlpha = decoded.hasAlpha;
+
+      // TASK 9: Calculate Image Metrics (Brightness, Ink Density, Black/White %)
+      int nonWhitePixels = 0;
+      int blackPixels = 0;
+      int whitePixels = 0;
+      double totalLuminance = 0;
+      final totalPixels = w * h;
+
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          final pixel = decoded.getPixel(x, y);
+          final lum = img.getLuminance(pixel).toInt();
+          totalLuminance += lum;
+          if (lum < 240) nonWhitePixels++;
+          if (lum < 50) blackPixels++;
+          if (lum > 220) whitePixels++;
+        }
+      }
+
+      final inkDensity = totalPixels > 0 ? (nonWhitePixels / totalPixels) * 100.0 : 0.0;
+      final avgBrightness = totalPixels > 0 ? (totalLuminance / (totalPixels * 255.0)) * 100.0 : 0.0;
+      final whitePct = totalPixels > 0 ? (whitePixels / totalPixels) * 100.0 : 0.0;
+      final blackPct = totalPixels > 0 ? (blackPixels / totalPixels) * 100.0 : 0.0;
+
+      RecognitionLogger.log(
+        'Image Decode Summary:\n'
+        '  Width: ${w}px, Height: ${h}px\n'
+        '  Channels: $numChannels, Has Alpha: $hasAlpha\n'
+        '  Ink Density: ${inkDensity.toStringAsFixed(2)}%\n'
+        '  Avg Brightness: ${avgBrightness.toStringAsFixed(2)}%\n'
+        '  White: ${whitePct.toStringAsFixed(1)}%, Black: ${blackPct.toStringAsFixed(1)}%'
+      );
+
+      // TASK 3: Save Every Pipeline Stage (4 distinct artifacts)
+      Directory tempDir;
+      try {
+        tempDir = await getTemporaryDirectory();
+      } catch (_) {
+        tempDir = await getApplicationCacheDirectory();
+      }
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      tempOriginalFile = File('${tempDir.path}/debug_original_$timestamp.png');
+      await tempOriginalFile.writeAsBytes(imageBytes);
+
+      // Stage 2: Preprocessed (Grayscale + contrast)
+      final preprocessedImg = img.adjustColor(img.grayscale(img.Image.from(decoded)), contrast: 1.2);
+      final preprocessedBytes = Uint8List.fromList(img.encodePng(preprocessedImg));
+      tempPreprocessedFile = File('${tempDir.path}/debug_preprocessed_$timestamp.png');
+      await tempPreprocessedFile.writeAsBytes(preprocessedBytes);
+
+      // Stage 3: Thresholded Binarization
+      final thresholdImg = img.Image.from(preprocessedImg);
+      for (var y = 0; y < thresholdImg.height; y++) {
+        for (var x = 0; x < thresholdImg.width; x++) {
+          final p = thresholdImg.getPixel(x, y);
+          final lum = img.getLuminance(p).toInt();
+          if (lum < 200) {
+            thresholdImg.setPixelRgb(x, y, 0, 0, 0);
+          } else {
+            thresholdImg.setPixelRgb(x, y, 255, 255, 255);
+          }
+        }
+      }
+      final thresholdBytes = Uint8List.fromList(img.encodePng(thresholdImg));
+      tempThresholdFile = File('${tempDir.path}/debug_threshold_$timestamp.png');
+      await tempThresholdFile.writeAsBytes(thresholdBytes);
+
+      // Stage 4: Final Input File
+      tempFinalInputFile = File('${tempDir.path}/debug_final_input_$timestamp.png');
+      await tempFinalInputFile.writeAsBytes(imageBytes);
+
+      // TASK 5: Log Actual OCR Engine Execution
+      RecognitionLogger.stage(
+        'OCR_ENGINE',
+        '==========================\n'
+        'OCR ENGINE\n'
+        'Name: Google ML Kit TextRecognizer\n'
+        'Script: Latin Script\n'
+        'Package: google_mlkit_text_recognition\n'
+        '=========================='
+      );
+
+      final textRecognizer = await _getTextRecognizer();
+
+      // TASK 4: Test Path A (Raw Original PNG) vs Path B (Preprocessed PNG)
+      final inputImageOriginal = mlkit.InputImage.fromFile(tempOriginalFile);
+      final mlkit.RecognizedText resultOriginal = await textRecognizer
+          .processImage(inputImageOriginal)
+          .timeout(_imageOcrTimeout);
+
+      mlkit.RecognizedText activeResult = resultOriginal;
+      String activePathUsed = 'Path A (Original PNG)';
+
+      if (resultOriginal.blocks.isEmpty) {
+        RecognitionLogger.log('Path A (Original PNG) returned 0 blocks. Testing Path B (Preprocessed)...');
+        final inputImagePreprocessed = mlkit.InputImage.fromFile(tempPreprocessedFile);
+        final mlkit.RecognizedText resultPreprocessed = await textRecognizer
+            .processImage(inputImagePreprocessed)
+            .timeout(_imageOcrTimeout);
+
+        if (resultPreprocessed.blocks.isNotEmpty) {
+          activeResult = resultPreprocessed;
+          activePathUsed = 'Path B (Preprocessed PNG)';
+          RecognitionLogger.log('Path B succeeded with ${resultPreprocessed.blocks.length} blocks!');
+        }
+      }
+
+      // TASK 6 & 11: Log Raw OCR Structure
+      int totalLines = 0;
+      int totalWords = 0;
+      final rawLinesList = <String>[];
+      final lineItems = <LineItemData>[];
+
+      for (final block in activeResult.blocks) {
+        for (final line in block.lines) {
+          totalLines++;
+          totalWords += line.elements.length;
+          final lineText = line.text.trim();
+          if (lineText.isNotEmpty) {
+            rawLinesList.add(lineText);
+            // TASK 7: Bypass Bill Parser - direct raw line mapping
+            lineItems.add(LineItemData(
+              name: lineText,
+              confidence: line.confidence?.toDouble() ?? 0.9,
+            ));
+          }
+        }
+      }
+
+      final rawTextCombined = rawLinesList.join('\n');
+
+      RecognitionLogger.stage(
+        'RAW_OCR_STRUCTURE',
+        '==========================\n'
+        'RAW OCR STRUCTURE ($activePathUsed)\n'
+        'Blocks Found: ${activeResult.blocks.length}\n'
+        'Lines Found: $totalLines\n'
+        'Words/Elements Found: $totalWords\n'
+        'Raw Text Length: ${rawTextCombined.length} chars\n'
+        '==========================\n'
+        'RAW TEXT:\n$rawTextCombined\n'
+        '=========================='
+      );
+
+      // TASK 10: Failure Classification
+      OcrDiagnosticCategory category = OcrDiagnosticCategory.none;
+      String? failureCode;
+      final warnings = <String>[];
+
+      if (activeResult.blocks.isEmpty) {
+        category = OcrDiagnosticCategory.ocrReturnedZeroBlocks;
+        failureCode = 'OCR_RETURNED_ZERO_BLOCKS';
+        warnings.add('OCR_RETURNED_ZERO_BLOCKS: ML Kit text recognizer found 0 text blocks in image.');
+      } else if (rawTextCombined.isEmpty) {
+        category = OcrDiagnosticCategory.ocrReturnedEmptyText;
+        failureCode = 'OCR_RETURNED_EMPTY_TEXT';
+        warnings.add('OCR_RETURNED_EMPTY_TEXT: ML Kit returned blocks but zero non-whitespace text.');
+      }
+
+      if (inkDensity < 0.1) {
+        warnings.add('LOW_INK_DENSITY: Handwriting ink density is under 0.1% of canvas.');
+      }
+
+      return Result.success(BillStructureResult(
+        lineItems: lineItems,
+        confidence: 0.9,
+        rawText: rawTextCombined,
+        diagnosticCategory: category,
+        failureCode: failureCode,
+        warnings: warnings,
+        nonWhitePixelPercentage: inkDensity,
+        brightnessPercentage: avgBrightness,
+        debugOriginalPath: tempOriginalFile.path,
+        debugPreprocessedPath: tempPreprocessedFile.path,
+        debugThresholdPath: tempThresholdFile.path,
+        debugFinalInputPath: tempFinalInputFile.path,
+        detectedLines: rawLinesList,
+        recognizerName: 'Google ML Kit ($activePathUsed)',
+        blocksCount: activeResult.blocks.length,
+        linesCount: totalLines,
+        wordsCount: totalWords,
+        imageWidth: w,
+        imageHeight: h,
+      ));
+    } on TimeoutException {
+      RecognitionLogger.stage('IMAGE_OCR', 'Timeout Triggered');
+      _disposeTextRecognizer();
+      return Result.success(const BillStructureResult(
+        diagnosticCategory: OcrDiagnosticCategory.timeout,
+        failureCode: 'MODEL_INFERENCE_TIMEOUT',
+        warnings: ['MODEL_INFERENCE_TIMEOUT: Image OCR timed out after 10s.'],
+      ));
+    } catch (e, stack) {
+      RecognitionLogger.error('Image OCR', e, stack);
+      _disposeTextRecognizer();
+      return Result.success(BillStructureResult(
+        diagnosticCategory: OcrDiagnosticCategory.modelInferenceFailed,
+        failureCode: 'MODEL_INFERENCE_FAILED',
+        warnings: ['MODEL_INFERENCE_FAILED: $e'],
+      ));
     }
   }
 
   Future<Result<double>> calculateConfidence(
       List<InkStroke> strokes) async {
     try {
-      return Result.success(0.6);
+      final result = await _handwritingEngine
+          .recognize(strokes, timeout: _strokeRecognitionTimeout);
+      return Result.success(result.recognition.overallConfidence);
     } catch (e) {
       return Result.error(
-          RecognitionFailure(message: 'Confidence calculation failed'));
+          RecognitionFailure(message: 'Confidence calculation failed: $e'));
     }
-  }
-
-  // ---- Private helpers ----
-
-  List<List<InkStroke>> _groupIntoRows(List<InkStroke> strokes) {
-    if (strokes.isEmpty) return [];
-
-    final sorted = List<InkStroke>.from(strokes)
-      ..sort((a, b) => a.points.first.y.compareTo(b.points.first.y));
-
-    const rowThreshold = 40.0;
-    const colGap = 60.0;
-    final rows = <List<InkStroke>>[];
-
-    for (final stroke in sorted) {
-      bool added = false;
-      for (final row in rows) {
-        final rowY = row.first.points.first.y;
-        if ((stroke.points.first.y - rowY).abs() <= rowThreshold) {
-          row.add(stroke);
-          added = true;
-          break;
-        }
-      }
-      if (!added) {
-        rows.add([stroke]);
-      }
-    }
-
-    // Sort strokes within each row by X position
-    for (final row in rows) {
-      row.sort((a, b) => a.points.first.x.compareTo(b.points.first.x));
-    }
-
-    // Try to split into columns (item | quantity | rate)
-    final result = <List<InkStroke>>[];
-    for (final row in rows) {
-      final groups = <List<InkStroke>>[];
-      for (final stroke in row) {
-        bool grouped = false;
-        for (final group in groups) {
-          final lastX = group.last.points.last.x;
-          if ((stroke.points.first.x - lastX).abs() <= colGap) {
-            group.add(stroke);
-            grouped = true;
-            break;
-          }
-        }
-        if (!grouped) groups.add([stroke]);
-      }
-      result.addAll(groups);
-    }
-
-    return result;
-  }
-
-  String _classifyRegion(InkStroke stroke) {
-    // Simple heuristic: strokes on the left side are item names,
-    // middle strokes are quantities, right strokes are rates
-    final avgX = stroke.points
-            .map((p) => p.x)
-            .reduce((a, b) => a + b) /
-        stroke.points.length;
-
-    if (avgX < 100) return 'item';
-    if (avgX < 160) return 'quantity';
-    return 'rate';
-  }
-
-  String _recognizeRegion(InkStroke stroke) {
-    // Stroke-based character recognition using bounding box features
-    final bounds = _strokeBounds(stroke);
-    final w = bounds['width'] as double;
-    final h = bounds['height'] as double;
-    final aspect = w / h;
-
-    // Group strokes by column proximity
-    final letters = <List<InkPoint>>[];
-    final sortedPts = List<InkPoint>.from(stroke.points)
-      ..sort((a, b) => a.x.compareTo(b.x));
-
-    List<InkPoint>? currentLetter;
-    for (final pt in sortedPts) {
-      if (currentLetter == null || currentLetter.isEmpty) {
-        currentLetter = [pt];
-      } else {
-        final lastX = currentLetter.last.x;
-        if ((pt.x - lastX).abs() < w / 3) {
-          currentLetter.add(pt);
-        } else {
-          letters.add(currentLetter);
-          currentLetter = [pt];
-        }
-      }
-    }
-    if (currentLetter != null && currentLetter.isNotEmpty) {
-      letters.add(currentLetter);
-    }
-
-    // Map letter features to characters (simple heuristic)
-    final buffer = StringBuffer();
-    for (final letter in letters) {
-      buffer.write(_letterGuess(letter));
-    }
-    return buffer.toString();
-  }
-
-  String _letterGuess(List<InkPoint> points) {
-    if (points.isEmpty) return '';
-
-    double minX = double.infinity, maxX = double.negativeInfinity;
-    double minY = double.infinity, maxY = double.negativeInfinity;
-    for (final p in points) {
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
-    }
-
-    final w = maxX - minX;
-    final h = maxY - minY;
-    if (w <= 0 || h <= 0) return '';
-
-    final aspect = w / h;
-    final midX = (minX + maxX) / 2;
-    final midY = (minY + maxY) / 2;
-
-    // Count how many points in each quadrant
-    int tl = 0, tr = 0, bl = 0, br = 0;
-    for (final p in points) {
-      if (p.x < midX) {
-        if (p.y < midY) tl++; else bl++;
-      } else {
-        if (p.y < midY) tr++; else br++;
-      }
-    }
-    final total = tl + tr + bl + br;
-
-    // Very basic letter recognition from point distribution
-    // This is intentionally simple - the real recognition happens via image processing
-    if (total == 0) return '';
-
-    final tlRatio = tl / total;
-    final trRatio = tr / total;
-    final blRatio = bl / total;
-    final brRatio = br / total;
-
-    // Try to identify common letters
-    if (w < 5 && h > 15) return 'l'; // tall and narrow
-    if (w > 15 && h < 8) return '_'; // horizontal line (separator or dash)
-    if (tlRatio > 0.4 && brRatio > 0.3) return 's';
-    if (trRatio > 0.4 && blRatio > 0.3) return 'z';
-    if (tlRatio > 0.3 && trRatio > 0.3 && blRatio > 0.05) return 'o';
-    if (tlRatio > 0.4 && blRatio > 0.3) return 'c';
-    if (brRatio > 0.4) return 'e';
-    if (blRatio > 0.4) return 'a';
-
-    // Wider than tall - likely multiple characters or number
-    if (aspect > 0.8) return _guessNumber(points);
-    return '?';
-  }
-
-  String _guessNumber(List<InkPoint> points) {
-    double minX = double.infinity, maxX = double.negativeInfinity;
-    double minY = double.infinity, maxY = double.negativeInfinity;
-    for (final p in points) {
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
-    }
-
-    final midX = (minX + maxX) / 2;
-    final midY = (minY + maxY) / 2;
-    int tl = 0, tr = 0, bl = 0, br = 0;
-    for (final p in points) {
-      if (p.x < midX) { if (p.y < midY) tl++; else bl++; }
-      else { if (p.y < midY) tr++; else br++; }
-    }
-    final total = tl + tr + bl + br;
-    if (total == 0) return '';
-
-    // Number guessing based on point distribution
-    if (tl > bl && tl > tr && tl > br) return '1';
-    if (tr > tl && tr > br) return '2';
-    if (bl > tl && bl > br) return '3';
-    if (br > bl && br > tr) return '5';
-    if (tl + tr > bl + br) return '7';
-    if (bl + br > tl + tr) return '0';
-    return '4';
   }
 
   String _correctItemName(String raw) {
     if (raw.isEmpty) return raw;
-
-    // Try fuzzy match against known items
     final lower = raw.toLowerCase().trim();
 
-    // Direct match
     for (final item in _knownItems) {
       if (lower == item) return _capitalize(item);
     }
-
-    // Contains match
     for (final item in _knownItems) {
       if (lower.contains(item) || item.contains(lower)) {
         return _capitalize(item);
       }
     }
 
-    // Levenshtein distance for typo correction
     String bestMatch = raw;
-    int bestDist = 3; // max edit distance
+    int bestDist = 3;
     for (final item in _knownItems) {
       final dist = _levenshtein(lower, item);
       if (dist < bestDist) {
@@ -391,69 +476,23 @@ class RecognitionLocalDataSource {
       }
     }
 
-    return _capitalize(bestMatch);
+    if (bestDist < 3 && bestMatch != raw) {
+      return _capitalize(bestMatch);
+    }
+    return _capitalize(raw);
   }
 
-  double? _extractQuantity(String text) {
-    for (final pattern in _quantityPatterns) {
-      final match = pattern.firstMatch(text.trim());
-      if (match != null) {
-        return double.tryParse(match.group(1)!);
-      }
+  bool _looksLikeQuantity(double value, String raw) {
+    final lower = raw.toLowerCase();
+    for (final word in ['kg', 'g', 'l', 'ml', 'pcs', 'pack']) {
+      if (lower.contains(word)) return true;
     }
-    return null;
-  }
-
-  double? _extractRate(String text) {
-    for (final pattern in _ratePatterns) {
-      final match = pattern.firstMatch(text.trim());
-      if (match != null) {
-        return double.tryParse(match.group(1)!);
-      }
-    }
-    return null;
-  }
-
-  Map<String, dynamic> _calculateBounds(List<InkStroke> strokes) {
-    var minX = double.infinity, minY = double.infinity;
-    var maxX = double.negativeInfinity, maxY = double.negativeInfinity;
-    for (final stroke in strokes) {
-      for (final point in stroke.points) {
-        if (point.x < minX) minX = point.x;
-        if (point.y < minY) minY = point.y;
-        if (point.x > maxX) maxX = point.x;
-        if (point.y > maxY) maxY = point.y;
-      }
-    }
-    return {
-      'minX': minX, 'minY': minY,
-      'maxX': maxX, 'maxY': maxY,
-      'width': maxX - minX,
-      'height': maxY - minY,
-    };
-  }
-
-  Map<String, dynamic> _strokeBounds(InkStroke stroke) {
-    var minX = double.infinity, minY = double.infinity;
-    var maxX = double.negativeInfinity, maxY = double.negativeInfinity;
-    for (final point in stroke.points) {
-      if (point.x < minX) minX = point.x;
-      if (point.y < minY) minY = point.y;
-      if (point.x > maxX) maxX = point.x;
-      if (point.y > maxY) maxY = point.y;
-    }
-    return {
-      'minX': minX, 'minY': minY,
-      'maxX': maxX, 'maxY': maxY,
-      'width': maxX - minX,
-      'height': maxY - minY,
-    };
+    return value <= 100 && value == value.roundToDouble();
   }
 
   int _levenshtein(String a, String b) {
     if (a.length < b.length) return _levenshtein(b, a);
     if (b.isEmpty) return a.length;
-
     var prev = List.generate(b.length + 1, (i) => i);
     var curr = List.filled(b.length + 1, 0);
     for (var i = 0; i < a.length; i++) {

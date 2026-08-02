@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:inkbill_ai/core/supabase/supabase_config.dart';
 import 'package:inkbill_ai/features/auth/presentation/providers/auth_provider.dart';
 import 'package:inkbill_ai/features/auth/presentation/pages/privacy_page.dart';
 import 'package:inkbill_ai/core/database/database_provider.dart';
 import 'package:inkbill_ai/features/auth/presentation/pages/terms_page.dart';
+import 'package:inkbill_ai/services/recognition/recognition_service.dart';
+import 'package:inkbill_ai/services/recognition/engine/ocr_engine_interface.dart';
+import 'package:inkbill_ai/features/billing/presentation/pages/developer_dashboard_page.dart';
 import 'package:share_plus/share_plus.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -70,6 +72,75 @@ class SettingsPage extends ConsumerWidget {
                   title: const Text('Terms of Service'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsPage())),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _SectionHeader(title: 'OCR AI Engine & Multilingual'),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.memory, color: Colors.indigo),
+                  title: const Text('Active OCR Engine'),
+                  subtitle: Text(RecognitionService().activeEngineName),
+                  trailing: DropdownButton<OcrEngineMode>(
+                    value: RecognitionService().engineMode,
+                    underline: const SizedBox(),
+                    onChanged: (mode) {
+                      if (mode != null) {
+                        RecognitionService().setEngineMode(mode);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Switched engine to ${RecognitionService().activeEngineName}')),
+                        );
+                      }
+                    },
+                    items: const [
+                      DropdownMenuItem(
+                        value: OcrEngineMode.paddleOcrTrOcr,
+                        child: Text('PaddleOCR + TrOCR (Production Default)'),
+                      ),
+                      DropdownMenuItem(
+                        value: OcrEngineMode.mlKitDebug,
+                        child: Text('Google ML Kit (Debug Only)'),
+                      ),
+                      DropdownMenuItem(
+                        value: OcrEngineMode.auto,
+                        child: Text('Auto (PaddleOCR / Fallback)'),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.language, color: Colors.blue),
+                  title: const Text('Recognition Language'),
+                  subtitle: Text(RecognitionService().language.name.toUpperCase()),
+                  trailing: DropdownButton<OcrLanguage>(
+                    value: RecognitionService().language,
+                    underline: const SizedBox(),
+                    onChanged: (lang) {
+                      if (lang != null) {
+                        RecognitionService().setLanguage(lang);
+                      }
+                    },
+                    items: const [
+                      DropdownMenuItem(value: OcrLanguage.english, child: Text('English')),
+                      DropdownMenuItem(value: OcrLanguage.hindi, child: Text('Hindi (हिन्दी)')),
+                      DropdownMenuItem(value: OcrLanguage.marathi, child: Text('Marathi (मराठी)')),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.dashboard, color: Colors.purple),
+                  title: const Text('Developer Mode Dashboard'),
+                  subtitle: const Text('Live ONNX, RAM, Detection & Latency Metrics'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const DeveloperDashboardPage()));
+                  },
                 ),
               ],
             ),

@@ -1,0 +1,35 @@
+[
+  {
+    "model_name": "GOT-OCR2_0 (Experimental)",
+    "init_time_sec": 122.98531603813171,
+    "samples": [
+      {
+        "sample_name": "english_1.png",
+        "language": "english",
+        "expected": "Apple 2 50 Milk 3 30",
+        "predicted": "",
+        "cer": 1.0,
+        "wer": 1.0,
+        "latency_sec": 0.04217123985290527
+      },
+      {
+        "sample_name": "hindi_1.png",
+        "language": "hindi",
+        "expected": "साखर 2 45 दूध 3 30",
+        "predicted": "",
+        "cer": 1.0,
+        "wer": 1.0,
+        "latency_sec": 0.016325950622558594
+      },
+      {
+        "sample_name": "mixed_1.png",
+        "language": "mixed",
+        "expected": "Apple 2 120 तेल 1 150",
+        "predicted": "",
+        "cer": 1.0,
+        "wer": 1.0,
+        "latency_sec": 0.014897346496582031
+      }
+    ]
+  }
+]

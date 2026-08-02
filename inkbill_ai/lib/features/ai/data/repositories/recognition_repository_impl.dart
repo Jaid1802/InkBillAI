@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:inkbill_ai/core/utils/result.dart';
 import 'package:inkbill_ai/features/ai/domain/entities/recognition_result.dart';
 import 'package:inkbill_ai/features/ai/domain/repositories/recognition_repository.dart';
@@ -30,6 +31,12 @@ class RecognitionRepositoryImpl implements RecognitionRepository {
   Future<Result<BillStructureResult>> extractBillStructure(
       List<InkStroke> strokes) {
     return _localDataSource.extractBillStructure(strokes);
+  }
+
+  @override
+  Future<Result<BillStructureResult>> extractBillStructureFromImage(
+      Uint8List imageBytes) {
+    return _localDataSource.extractBillStructureFromImage(imageBytes);
   }
 
   @override

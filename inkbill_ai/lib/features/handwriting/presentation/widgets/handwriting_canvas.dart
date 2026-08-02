@@ -1,14 +1,22 @@
-import 'dart:ui' as ui show PointerDeviceKind;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:perfect_freehand/perfect_freehand.dart';
+import 'package:inkbill_ai/features/handwriting/domain/entities/ink_stroke.dart';
 import 'package:inkbill_ai/features/handwriting/presentation/providers/canvas_provider.dart';
 import 'package:inkbill_ai/services/canvas_engine/canvas_engine.dart';
-import 'package:inkbill_ai/services/canvas_engine/canvas_renderer.dart';
 
 class HandwritingCanvas extends ConsumerStatefulWidget {
   final String pageId;
+  final VoidCallback? onStrokeStarted;
+  final TransformationController? transformationController;
 
-  const HandwritingCanvas({super.key, required this.pageId});
+  const HandwritingCanvas({
+    super.key,
+    required this.pageId,
+    this.onStrokeStarted,
+    this.transformationController,
+  });
 
   @override
   ConsumerState<HandwritingCanvas> createState() => _HandwritingCanvasState();
@@ -16,163 +24,119 @@ class HandwritingCanvas extends ConsumerStatefulWidget {
 
 class _HandwritingCanvasState extends ConsumerState<HandwritingCanvas>
     with TickerProviderStateMixin {
-  final CanvasRenderer _renderer = CanvasRenderer();
-  final TransformationController _transformController =
-      TransformationController();
+  late final TransformationController _transformCtrl;
+  final Map<String, Path> _pathCache = {};
 
-  Offset? _eraserPos;
   int _activePointer = -1;
-  int _touchDrawPointer = -1;
-  bool _isZooming = false;
-  double _baseScale = 1.0;
-  Offset _lastFocalPoint = Offset.zero;
-  bool _showEraserIndicator = false;
+  bool _isDrawing = false;
+  bool _isErasing = false;
 
-  double _canvasHeight = 2000;
-  static const double _maxHeight = 20000;
-  static const double _growMargin = 600;
+  static const double _canvasWidth = 5000;
+  static const double _canvasHeight = 5000;
 
-  bool get _isErasing => _showEraserIndicator;
+  Offset? _currentEraserPos;
+
+  CanvasEngine get _engine => ref.read(canvasEngineProvider(widget.pageId));
+  bool get _isEraseMode => _engine.value.mode == CanvasMode.erase;
+
+  @override
+  void initState() {
+    super.initState();
+    _transformCtrl = widget.transformationController ?? TransformationController();
+  }
 
   @override
   void dispose() {
-    _renderer.dispose();
-    _transformController.dispose();
+    if (widget.transformationController == null) {
+      _transformCtrl.dispose();
+    }
     super.dispose();
   }
 
-  void _growCanvas(double y) {
-    final needed = y + _growMargin;
-    if (needed > _canvasHeight && _canvasHeight < _maxHeight) {
-      setState(
-        () => _canvasHeight = (needed + 500).clamp(0, _maxHeight),
-      );
-    }
-  }
-
-  Offset _toCanvasCoords(Offset localPos) {
-    final matrix = _transformController.value;
-    final inv = Matrix4.inverted(matrix);
-    return MatrixUtils.transformPoint(inv, localPos);
+  Offset _toCanvas(Offset local) {
+    final inv = Matrix4.inverted(_transformCtrl.value);
+    return MatrixUtils.transformPoint(inv, local);
   }
 
   void _onPointerDown(PointerDownEvent e) {
-    if (_isZooming) return;
+    final inputMode = _engine.value.inputMode;
 
-    final engine = ref.read(canvasEngineProvider(widget.pageId));
-    final pos = _toCanvasCoords(e.localPosition);
-    final isTouch = e.kind == ui.PointerDeviceKind.touch;
-    final isStylus = e.kind == ui.PointerDeviceKind.stylus;
-    final isMouse = e.kind == ui.PointerDeviceKind.mouse;
-
-    if (_activePointer >= 0) {
-      if (isTouch || isMouse) {
-        _isZooming = true;
-        _baseScale = _transformController.value.getMaxScaleOnAxis();
-        _lastFocalPoint = e.localPosition;
-      }
-      return;
+    if (e.kind == ui.PointerDeviceKind.touch) {
+      if (inputMode == InputMode.stylus) return;
+      if (e.size > 12.0) return;
+      if (e.localPosition.dy > MediaQuery.of(context).size.height - 80) return;
     }
 
+    if (_activePointer >= 0) return;
     _activePointer = e.pointer;
 
-    if (isStylus) {
-      _touchDrawPointer = -1;
-    } else if (isTouch) {
-      if (_touchDrawPointer >= 0) return;
-      _touchDrawPointer = e.pointer;
-    }
+    widget.onStrokeStarted?.call();
 
-    _growCanvas(pos.dy);
+    final pos = _toCanvas(e.localPosition);
 
-    if (engine.value.mode == CanvasMode.erase) {
-      setState(() => _showEraserIndicator = true);
-      _eraserPos = pos;
-      engine.eraseAt(pos.dx, pos.dy, pointerId: e.pointer);
+    if (_isEraseMode) {
+      _isErasing = true;
+      _currentEraserPos = pos;
+      _engine.eraseAt(pos.dx, pos.dy, pointerId: e.pointer);
+      setState(() {});
       return;
     }
 
-    engine.beginStroke(
+    _isDrawing = true;
+    _engine.beginStroke(
       pos.dx,
       pos.dy,
-      pressure: isStylus
+      pressure: e.kind == ui.PointerDeviceKind.stylus
           ? e.pressure
-          : (isTouch ? e.pressure * 0.8 : 0.5),
+          : (e.kind == ui.PointerDeviceKind.touch ? e.pressure * 0.8 : 0.5),
       timestampMs: e.timeStamp.inMilliseconds,
       pointerId: e.pointer,
-      isStylus: isStylus,
+      isStylus: e.kind == ui.PointerDeviceKind.stylus,
       isEraser: e.kind == ui.PointerDeviceKind.unknown,
     );
   }
 
   void _onPointerMove(PointerMoveEvent e) {
-    if (_isZooming) {
-      final focalDelta = e.localPosition - _lastFocalPoint;
-      final scale =
-          _baseScale * (1.0 + (focalDelta.dy / 300 - focalDelta.dx / 1000));
-      final clamped = scale.clamp(0.3, 8.0);
-      final newMatrix = Matrix4.identity()
-        ..translate(e.localPosition.dx, e.localPosition.dy)
-        ..scale(clamped)
-        ..translate(-e.localPosition.dx, -e.localPosition.dy);
-      _transformController.value = newMatrix;
-      return;
-    }
-
     if (e.pointer != _activePointer) return;
 
-    final engine = ref.read(canvasEngineProvider(widget.pageId));
-    final pos = _toCanvasCoords(e.localPosition);
+    final pos = _toCanvas(e.localPosition);
 
-    _growCanvas(pos.dy);
-
-    if (engine.value.mode == CanvasMode.erase) {
-      setState(() => _showEraserIndicator = true);
-      _eraserPos = pos;
-      engine.eraseAt(pos.dx, pos.dy, pointerId: e.pointer);
+    if (_isEraseMode && _isErasing) {
+      _currentEraserPos = pos;
+      _engine.eraseAt(pos.dx, pos.dy, pointerId: e.pointer);
+      setState(() {});
       return;
     }
 
-    final isStylus = e.kind == ui.PointerDeviceKind.stylus;
-    final isTouch = e.kind == ui.PointerDeviceKind.touch;
+    if (!_isDrawing) return;
 
-    engine.updateStroke(
+    _engine.updateStroke(
       pos.dx,
       pos.dy,
-      pressure: isStylus
+      pressure: e.kind == ui.PointerDeviceKind.stylus
           ? e.pressure
-          : (isTouch ? e.pressure * 0.8 : 0.5),
+          : (e.kind == ui.PointerDeviceKind.touch ? e.pressure * 0.8 : 0.5),
       timestampMs: e.timeStamp.inMilliseconds,
       pointerId: e.pointer,
-      isStylus: isStylus,
+      isStylus: e.kind == ui.PointerDeviceKind.stylus,
     );
   }
 
   void _onPointerUp(PointerUpEvent e) {
-    if (_isZooming) {
-      _isZooming = false;
-      return;
-    }
-
-    if (e.pointer != _activePointer) {
-      if (e.pointer == _touchDrawPointer) _touchDrawPointer = -1;
-      return;
-    }
+    if (e.pointer != _activePointer) return;
 
     _activePointer = -1;
-    _touchDrawPointer = -1;
 
-    final engine = ref.read(canvasEngineProvider(widget.pageId));
-
-    if (engine.value.mode == CanvasMode.erase) {
-      setState(() => _showEraserIndicator = false);
-      _eraserPos = null;
-      engine.endErase();
+    if (_isEraseMode && _isErasing) {
+      _isErasing = false;
+      _currentEraserPos = null;
+      _engine.endErase();
+      setState(() {});
       return;
     }
 
-    setState(() => _showEraserIndicator = false);
-    engine.endStroke(
+    _isDrawing = false;
+    _engine.endStroke(
       timestampMs: e.timeStamp.inMilliseconds,
       pointerId: e.pointer,
     );
@@ -181,76 +145,45 @@ class _HandwritingCanvasState extends ConsumerState<HandwritingCanvas>
   void _onPointerCancel(PointerCancelEvent e) {
     if (e.pointer == _activePointer || _activePointer < 0) {
       _activePointer = -1;
-      _touchDrawPointer = -1;
-      setState(() => _showEraserIndicator = false);
-      _eraserPos = null;
-      ref
-          .read(canvasEngineProvider(widget.pageId))
-          .cancelStroke(pointerId: e.pointer);
+      _isDrawing = false;
+      _isErasing = false;
+      _currentEraserPos = null;
+      _engine.cancelStroke(pointerId: e.pointer);
+      setState(() {});
     }
-  }
-
-  void _onScaleStart(ScaleStartDetails details) {
-    if (details.pointerCount >= 2) {
-      _isZooming = true;
-      _baseScale = _transformController.value.getMaxScaleOnAxis();
-    }
-  }
-
-  void _onScaleUpdate(ScaleUpdateDetails details) {
-    if (_isZooming && details.pointerCount >= 2) {
-      final scale = (_baseScale * details.scale).clamp(0.3, 8.0);
-      final newMatrix = Matrix4.identity()
-        ..translate(details.focalPoint.dx, details.focalPoint.dy)
-        ..scale(scale)
-        ..translate(-details.focalPoint.dx, -details.focalPoint.dy);
-      _transformController.value = newMatrix;
-    }
-  }
-
-  void _onScaleEnd(ScaleEndDetails details) {
-    _isZooming = false;
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(canvasStateProvider(widget.pageId));
-    final canvasWidth = MediaQuery.of(context).size.width;
 
-    return RepaintBoundary(
-      child: Listener(
-        onPointerDown: _onPointerDown,
-        onPointerMove: _onPointerMove,
-        onPointerUp: _onPointerUp,
-        onPointerCancel: _onPointerCancel,
-        child: GestureDetector(
-          onScaleStart: _onScaleStart,
-          onScaleUpdate: _onScaleUpdate,
-          onScaleEnd: _onScaleEnd,
-          child: InteractiveViewer(
-            transformationController: _transformController,
-            minScale: 0.3,
-            maxScale: 8.0,
-            panEnabled: false,
-            scaleEnabled: false,
-            constrained: false,
-            boundaryMargin: const EdgeInsets.all(double.infinity),
-            child: SizedBox(
-              width: canvasWidth,
-              height: _canvasHeight,
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  size: Size(canvasWidth, _canvasHeight),
-                  painter: _CanvasPainter(
-                    renderer: _renderer,
-                    state: state,
-                    eraserPos: _eraserPos,
-                    showEraser: _showEraserIndicator,
-                  ),
-                  isComplex: true,
-                  willChange: false,
-                ),
+    return Listener(
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerCancel,
+      child: InteractiveViewer(
+        transformationController: _transformCtrl,
+        minScale: 0.25,
+        maxScale: 10.0,
+        constrained: false,
+        boundaryMargin: const EdgeInsets.all(double.infinity),
+        panEnabled: false,
+        scaleEnabled: false,
+        child: SizedBox(
+          width: _canvasWidth,
+          height: _canvasHeight,
+          child: RepaintBoundary(
+            child: CustomPaint(
+              size: const Size(_canvasWidth, _canvasHeight),
+              painter: _InkCanvasPainter(
+                state: state,
+                pathCache: _pathCache,
+                eraserPos: _currentEraserPos,
+                isInEraseMode: _isEraseMode && _isErasing,
               ),
+              isComplex: true,
+              willChange: state.currentStroke != null,
             ),
           ),
         ),
@@ -259,63 +192,216 @@ class _HandwritingCanvasState extends ConsumerState<HandwritingCanvas>
   }
 }
 
-class _CanvasPainter extends CustomPainter {
-  final CanvasRenderer renderer;
+class _InkCanvasPainter extends CustomPainter {
   final CanvasState state;
+  final Map<String, Path> pathCache;
   final Offset? eraserPos;
-  final bool showEraser;
+  final bool isInEraseMode;
 
-  _CanvasPainter({
-    required this.renderer,
+  _InkCanvasPainter({
     required this.state,
+    required this.pathCache,
     this.eraserPos,
-    this.showEraser = false,
+    this.isInEraseMode = false,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.clipRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    _drawBackground(canvas, size);
 
-    renderer.renderBackground(canvas, size, state.background, 1.0);
+    final fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
 
     for (final stroke in state.strokes) {
-      renderer.renderStroke(canvas, stroke);
+      final path = _buildPath(stroke);
+      if (path == null) continue;
+      fillPaint.color = Color(stroke.color);
+      canvas.drawPath(path, fillPaint);
     }
 
     if (state.currentStroke != null) {
-      try {
-        final outlinePath = renderer.buildPerfectFreehandPath(
-          state.currentStroke!.points,
-          state.currentStroke!.width,
-        );
-        if (outlinePath.getBounds().isEmpty) {
-          renderer.renderStrokeSmooth(canvas, state.currentStroke!);
-        } else {
-          canvas.drawPath(
-            outlinePath,
-            Paint()
-              ..color = Color(state.currentStroke!.color)
-              ..style = PaintingStyle.fill
-              ..isAntiAlias = true,
-          );
-        }
-      } catch (_) {
-        renderer.renderStrokeSmooth(canvas, state.currentStroke!);
+      final path = _buildPath(state.currentStroke!);
+      if (path != null) {
+        fillPaint.color = Color(state.currentStroke!.color);
+        canvas.drawPath(path, fillPaint);
       }
     }
 
-    if (eraserPos != null && showEraser && state.mode == CanvasMode.erase) {
-      renderer.renderEraserIndicator(canvas, eraserPos!, state.eraserSize);
+    if (eraserPos != null && isInEraseMode) {
+      _drawEraserIndicator(canvas, eraserPos!, state.eraserSize);
     }
 
     if (state.strokes.isEmpty && state.currentStroke == null) {
-      renderer.renderHint(canvas, size, 1.0);
+      _drawHint(canvas, size);
     }
   }
 
+  Path? _buildPath(InkStroke stroke) {
+    final cached = pathCache[stroke.id];
+    if (cached != null) return cached;
+
+    try {
+      if (stroke.points.length < 2) return null;
+
+      final pts = stroke.points.map((p) => PointVector(
+        p.x,
+        p.y,
+        p.pressure,
+      )).toList();
+
+      final outline = getStroke(pts, options: StrokeOptions(
+        size: stroke.width * 1.5,
+        thinning: 0.6,
+        smoothing: 0.5,
+        streamline: 0.5,
+        simulatePressure: true,
+        isComplete: true,
+      ));
+
+      if (outline.isEmpty) return null;
+
+      final path = Path();
+      path.moveTo(outline[0].dx, outline[0].dy);
+      for (var i = 1; i < outline.length; i++) {
+        path.lineTo(outline[i].dx, outline[i].dy);
+      }
+      path.close();
+
+      pathCache[stroke.id] = path;
+      return path;
+    } catch (_) {
+      return _buildSmoothFallback(stroke);
+    }
+  }
+
+  Path? _buildSmoothFallback(InkStroke stroke) {
+    final pts = stroke.points;
+    if (pts.length < 2) return null;
+
+    final path = Path();
+    path.moveTo(pts.first.x, pts.first.y);
+
+    for (var i = 1; i < pts.length - 1; i++) {
+      final p0 = pts[i - 1];
+      final p1 = pts[i];
+      final p2 = pts[i + 1];
+      final cp1x = p0.x + (p1.x - p0.x) * 0.5;
+      final cp1y = p0.y + (p1.y - p0.y) * 0.5;
+      final cp2x = p1.x + (p2.x - p1.x) * 0.5;
+      final cp2y = p1.y + (p2.y - p1.y) * 0.5;
+      path.cubicTo(cp1x, cp1y, cp2x, cp2y, p1.x, p1.y);
+    }
+    path.lineTo(pts.last.x, pts.last.y);
+    return path;
+  }
+
+  void _drawBackground(Canvas canvas, Size size) {
+    final bgPaint = Paint()..color = Colors.white;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
+
+    if (state.background == CanvasBackground.grid) {
+      final gridPaint = Paint()
+        ..color = Colors.grey.withValues(alpha: 0.12)
+        ..strokeWidth = 0.5;
+      const spacing = 40.0;
+      for (double x = 0; x < size.width; x += spacing) {
+        canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      }
+      for (double y = 0; y < size.height; y += spacing) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      }
+    } else if (state.background == CanvasBackground.ruled) {
+      final rulePaint = Paint()
+        ..color = Colors.blue.withValues(alpha: 0.08)
+        ..strokeWidth = 0.5;
+      const lineSpacing = 32.0;
+      for (double y = lineSpacing; y < size.height; y += lineSpacing) {
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), rulePaint);
+      }
+    }
+
+    _drawBillGuides(canvas, size);
+  }
+
+  void _drawBillGuides(Canvas canvas, Size size) {
+    final guidePaint = Paint()
+      ..color = Colors.blue.withValues(alpha: 0.15)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+      
+    final textStyle = TextStyle(
+      color: Colors.blue.withValues(alpha: 0.3),
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+    );
+
+    final billWidth = size.width < 800 ? size.width : 800.0;
+    
+    final colItem = billWidth * 0.45;
+    final colQty = billWidth * 0.15;
+    final colRate = billWidth * 0.20;
+    
+    double currentX = 0;
+    
+    void drawColumnLineAndTitle(String title, double width) {
+      if (currentX > 0) {
+        canvas.drawLine(Offset(currentX, 0), Offset(currentX, size.height), guidePaint);
+      }
+      
+      final tp = TextPainter(
+        text: TextSpan(text: title, style: textStyle),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout();
+      tp.paint(canvas, Offset(currentX + 8, 8));
+      
+      currentX += width;
+    }
+    
+    drawColumnLineAndTitle('Item Name', colItem);
+    drawColumnLineAndTitle('Qty', colQty);
+    drawColumnLineAndTitle('Rate', colRate);
+    drawColumnLineAndTitle('Amount', billWidth - currentX);
+    
+    canvas.drawLine(Offset(billWidth, 0), Offset(billWidth, size.height), guidePaint);
+    
+    canvas.drawLine(const Offset(0, 32), Offset(billWidth, 32), guidePaint);
+  }
+
+  void _drawEraserIndicator(Canvas canvas, Offset pos, double size) {
+    final fill = Paint()
+      ..color = Colors.grey.withValues(alpha: 0.15)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(pos, size, fill);
+
+    final border = Paint()
+      ..color = Colors.grey.withValues(alpha: 0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(pos, size, border);
+  }
+
+  void _drawHint(Canvas canvas, Size size) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: 'Start writing here...',
+        style: TextStyle(
+          color: Colors.grey.shade300,
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+    tp.paint(canvas, const Offset(24, 24));
+  }
+
   @override
-  bool shouldRepaint(covariant _CanvasPainter old) {
-    return old.state != state || old.eraserPos != eraserPos ||
-        old.showEraser != showEraser;
+  bool shouldRepaint(covariant _InkCanvasPainter old) {
+    return old.state != state ||
+        old.eraserPos != eraserPos ||
+        old.isInEraseMode != isInEraseMode;
   }
 }

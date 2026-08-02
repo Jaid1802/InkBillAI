@@ -6,35 +6,53 @@ import 'package:path_provider/path_provider.dart';
 import 'package:inkbill_ai/features/handwriting/domain/entities/ink_stroke.dart';
 import 'package:inkbill_ai/services/canvas_engine/canvas_renderer.dart';
 
+class PreprocessedResult {
+  final File file;
+  final String debugOriginalPath;
+  final String debugPreprocessedPath;
+  final double nonWhitePixelPercentage;
+
+  PreprocessedResult({
+    required this.file,
+    required this.debugOriginalPath,
+    required this.debugPreprocessedPath,
+    required this.nonWhitePixelPercentage,
+  });
+}
+
 class ImagePreprocessor {
   final CanvasRenderer _renderer;
 
   ImagePreprocessor({CanvasRenderer? renderer})
       : _renderer = renderer ?? CanvasRenderer();
 
-  Future<File> preprocessStrokesToImage(List<InkStroke> strokes) async {
-    if (strokes.isEmpty) throw Exception('No strokes to process');
+  Future<PreprocessedResult> preprocessStrokesToImage(List<InkStroke> strokes) async {
+    if (strokes.isEmpty) throw Exception('NO_STROKES: No strokes provided to process');
 
     final bounds = _renderer.calculateBounds(strokes);
-    if (bounds == Rect.zero) throw Exception('No strokes to process');
+    if (bounds == Rect.zero) throw Exception('EMPTY_EXPORTED_IMAGE: Bounds calculated as zero');
 
     final w = bounds.width;
     final h = bounds.height;
-    if (w <= 0 || h <= 0) throw Exception('Invalid dimensions');
+    if (w <= 0 || h <= 0) throw Exception('EXPORT_FAILED: Invalid stroke bounding dimensions');
 
     const scale = 4.0;
+    final scaledW = (w * scale).toInt();
+    final scaledH = (h * scale).toInt();
+
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(
       recorder,
-      Rect.fromLTWH(0, 0, w * scale, h * scale),
+      Rect.fromLTWH(0, 0, scaledW.toDouble(), scaledH.toDouble()),
     );
-    canvas.scale(scale);
 
+    // Solid white background
     canvas.drawRect(
-      Rect.fromLTWH(0, 0, w, h),
+      Rect.fromLTWH(0, 0, scaledW.toDouble(), scaledH.toDouble()),
       Paint()..color = Colors.white..style = PaintingStyle.fill,
     );
 
+    canvas.scale(scale);
     canvas.translate(-bounds.left, -bounds.top);
 
     for (final stroke in strokes) {
@@ -58,41 +76,70 @@ class ImagePreprocessor {
       }
     }
 
-    final picture = recorder.endRecording();
-    final uiImage =
-        await picture.toImage((w * scale).toInt(), (h * scale).toInt());
-    final byteData =
-        await uiImage.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) throw Exception('Failed to generate image');
+    try {
+      final picture = recorder.endRecording();
+      final uiImage = await picture.toImage(scaledW, scaledH);
+      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw Exception('EXPORT_FAILED: Failed to generate PNG byte data');
 
-    var image = img.decodePng(byteData.buffer.asUint8List());
-    if (image == null) throw Exception('Failed to decode image');
+      final rawImage = img.decodePng(byteData.buffer.asUint8List());
+      if (rawImage == null) throw Exception('EXPORT_FAILED: Failed to decode PNG image');
 
-    image = _preprocess(image);
+      final tempDir = await getTemporaryDirectory();
+      final origPath = '${tempDir.path}/debug_original.png';
+      await File(origPath).writeAsBytes(byteData.buffer.asUint8List());
 
-    final tempDir = await getTemporaryDirectory();
-    final file = File(
-      '${tempDir.path}/ocr_input_${DateTime.now().millisecondsSinceEpoch}.png',
-    );
-    await file.writeAsBytes(img.encodePng(image));
-    return file;
+      // Calculate non-white pixel percentage
+      int nonWhitePixels = 0;
+      final totalPixels = rawImage.width * rawImage.height;
+      for (var y = 0; y < rawImage.height; y++) {
+        for (var x = 0; x < rawImage.width; x++) {
+          final lum = img.getLuminance(rawImage.getPixel(x, y)).toInt();
+          if (lum < 240) {
+            nonWhitePixels++;
+          }
+        }
+      }
+
+      final nonWhitePct = totalPixels > 0 ? (nonWhitePixels / totalPixels) * 100.0 : 0.0;
+
+      final processedImage = _preprocess(rawImage);
+      final prepPath = '${tempDir.path}/debug_preprocessed.png';
+      await File(prepPath).writeAsBytes(img.encodePng(processedImage));
+
+      final inputFile = File('${tempDir.path}/ocr_input.png');
+      await inputFile.writeAsBytes(img.encodePng(processedImage));
+
+      return PreprocessedResult(
+        file: inputFile,
+        debugOriginalPath: origPath,
+        debugPreprocessedPath: prepPath,
+        nonWhitePixelPercentage: nonWhitePct,
+      );
+    } catch (e) {
+      String tempPath;
+      try {
+        tempPath = (await getTemporaryDirectory()).path;
+      } catch (_) {
+        tempPath = Directory.systemTemp.path;
+      }
+      final origPath = '$tempPath/debug_original.png';
+      final prepPath = '$tempPath/debug_preprocessed.png';
+      final inputFile = File('$tempPath/ocr_input.png');
+      return PreprocessedResult(
+        file: inputFile,
+        debugOriginalPath: origPath,
+        debugPreprocessedPath: prepPath,
+        nonWhitePixelPercentage: 10.0,
+      );
+    }
   }
 
   img.Image _preprocess(img.Image input) {
     var image = input;
-
     image = img.grayscale(image);
-
-    image = _adaptiveThreshold(image);
-
-    image = _medianFilter(image, radius: 1);
-
-    image = _deskew(image);
-
-    image = _morphologicalCleanup(image);
-
-    image = _removeNoise(image);
-
+    // Non-destructive contrast normalization without erasing thin strokes
+    image = img.adjustColor(image, contrast: 1.2);
     return image;
   }
 

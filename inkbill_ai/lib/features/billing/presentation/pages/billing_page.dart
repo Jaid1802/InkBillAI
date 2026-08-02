@@ -12,11 +12,36 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
 
 
-class BillingPage extends ConsumerWidget {
+class BillingPage extends ConsumerStatefulWidget {
   const BillingPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BillingPage> createState() => _BillingPageState();
+}
+
+class _BillingPageState extends ConsumerState<BillingPage> {
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+  BillStatus? _statusFilter;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  BillStatus? _parseStatus(String label) {
+    switch (label) {
+      case 'Draft': return BillStatus.draft;
+      case 'Finalized': return BillStatus.finalized;
+      case 'Paid': return BillStatus.paid;
+      case 'Cancelled': return BillStatus.cancelled;
+      default: return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final billsAsync = ref.watch(allBillsProvider);
 
     return Scaffold(
@@ -34,15 +59,89 @@ class BillingPage extends ConsumerWidget {
         onPressed: () => _createNewBill(context),
         child: const Icon(Icons.add),
       ),
-      body: billsAsync.when(
-        data: (bills) => bills.isEmpty
-            ? const Center(child: Text('No bills yet. Create your first bill!'))
-            : ListView.builder(
-                itemCount: bills.length,
-                itemBuilder: (context, index) => _BillCard(bill: bills[index]),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: TextField(
+              controller: _searchCtrl,
+              decoration: InputDecoration(
+                hintText: 'Search by customer, bill no...',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
               ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => const Center(child: Text('Something went wrong. Please try again.')),
+              onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+            ),
+          ),
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                _FilterChip(label: 'All', selected: _statusFilter == null, onSelected: () => setState(() => _statusFilter = null)),
+                const SizedBox(width: 6),
+                _FilterChip(label: 'Draft', selected: _statusFilter == BillStatus.draft, onSelected: () => setState(() => _statusFilter = BillStatus.draft)),
+                const SizedBox(width: 6),
+                _FilterChip(label: 'Finalized', selected: _statusFilter == BillStatus.finalized, onSelected: () => setState(() => _statusFilter = BillStatus.finalized)),
+                const SizedBox(width: 6),
+                _FilterChip(label: 'Paid', selected: _statusFilter == BillStatus.paid, onSelected: () => setState(() => _statusFilter = BillStatus.paid)),
+                const SizedBox(width: 6),
+                _FilterChip(label: 'Cancelled', selected: _statusFilter == BillStatus.cancelled, onSelected: () => setState(() => _statusFilter = BillStatus.cancelled)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: billsAsync.when(
+              data: (bills) {
+                final filtered = bills.where((b) {
+                  if (_statusFilter != null && b.status != _statusFilter) return false;
+                  if (_searchQuery.isNotEmpty) {
+                    final q = _searchQuery;
+                    if (b.id.toLowerCase().contains(q)) return true;
+                    if (b.customerName?.toLowerCase().contains(q) ?? false) return true;
+                    return false;
+                  }
+                  return true;
+                }).toList();
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.receipt_long, size: 48, color: Colors.grey.shade300),
+                        const SizedBox(height: 8),
+                        Text(
+                          bills.isEmpty ? 'No bills yet. Create your first bill!' : 'No bills match your search.',
+                          style: TextStyle(color: Colors.grey.shade500),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) => _BillCard(bill: filtered[index]),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, __) => const Center(child: Text('Something went wrong.')),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -52,6 +151,25 @@ class BillingPage extends ConsumerWidget {
       MaterialPageRoute(
         builder: (_) => const BillEditorPage(),
       ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  const _FilterChip({required this.label, required this.selected, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return FilterChip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
 }

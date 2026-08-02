@@ -97,7 +97,7 @@ void main() {
       expect(engine.value.strokes.length, 0);
     });
 
-    test('partial erase splits a stroke', () {
+    test('stroke eraser removes entire stroke on touch', () {
       engine.beginStroke(0, 0, timestampMs: 0, pointerId: 0);
       engine.updateStroke(50, 0, timestampMs: 10, pointerId: 0);
       engine.updateStroke(100, 0, timestampMs: 20, pointerId: 0);
@@ -112,7 +112,7 @@ void main() {
       engine.endErase();
       engine.setMode(CanvasMode.draw);
 
-      expect(engine.value.strokes.length, greaterThanOrEqualTo(0));
+      expect(engine.value.strokes.length, 0);
     });
   });
 

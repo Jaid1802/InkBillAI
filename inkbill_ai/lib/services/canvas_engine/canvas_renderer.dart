@@ -216,17 +216,23 @@ class CanvasRenderer extends ChangeNotifier {
   ui.Picture renderToPicture(List<InkStroke> strokes, Size size,
       {double scale = 1.0, Rect? cropRect}) {
     final recorder = ui.PictureRecorder();
-    final renderSize =
-        cropRect ?? Offset.zero & size;
-    final canvas = Canvas(
-        recorder, Rect.fromLTWH(0, 0, renderSize.width, renderSize.height));
-    canvas.scale(scale);
+    final bounds = cropRect ?? (Offset.zero & size);
+    final scaledWidth = bounds.width * scale;
+    final scaledHeight = bounds.height * scale;
 
+    final canvas = Canvas(
+        recorder, Rect.fromLTWH(0, 0, scaledWidth, scaledHeight));
+
+    // Fill solid white background across the entire scaled canvas
     canvas.drawRect(
-      Rect.fromLTWH(0, 0, renderSize.width, renderSize.height),
+      Rect.fromLTWH(0, 0, scaledWidth, scaledHeight),
       Paint()..color = Colors.white,
     );
 
+    // Apply scaling transform
+    canvas.scale(scale);
+
+    // Translate canvas origin to top-left of crop bounds in logical coordinates
     if (cropRect != null) {
       canvas.translate(-cropRect.left, -cropRect.top);
     }
