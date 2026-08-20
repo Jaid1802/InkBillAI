@@ -67,9 +67,15 @@ app.add_middleware(
 
 class ProcessRequest(BaseModel):
     text: Optional[str] = None
+    rawText: Optional[str] = None
     imageBase64: Optional[str] = None
     mimeType: str = "image/png"
     strokes: Optional[List[Dict[str, Any]]] = None
+
+    @property
+    def recognized_text(self) -> Optional[str]:
+        value = (self.text or self.rawText or "").strip()
+        return value or None
 
 
 class LineItem(BaseModel):
@@ -112,8 +118,9 @@ def _to_float(value: Any, default: float) -> float:
 def _build_parts(req: ProcessRequest) -> List[types.Part]:
     parts: List[types.Part] = [types.Part.from_text(text=SYSTEM_PROMPT)]
 
-    if req.text and req.text.strip():
-        parts.append(types.Part.from_text(text=f"Raw Text:\n{req.text.strip()}"))
+    recognized = req.recognized_text
+    if recognized:
+        parts.append(types.Part.from_text(text=f"Raw Text:\n{recognized}"))
 
     if req.imageBase64:
         try:
@@ -167,10 +174,9 @@ def health():
     return {"status": "ok", "model": GEMINI_MODEL if _client else None}
 
 
-@app.post("/process", response_model=ProcessResponse)
-async def process(req: ProcessRequest):
-    if not req.text and not req.imageBase64:
-        raise HTTPException(status_code=422, detail="Provide either 'text' or 'imageBase64'.")
+async def _run_processing(req: ProcessRequest) -> ProcessResponse:
+    if not req.recognized_text and not req.imageBase64:
+        raise HTTPException(status_code=422, detail="Provide either 'text'/'rawText' or 'imageBase64'.")
 
     if _client is None:
         raise HTTPException(
@@ -222,3 +228,13 @@ async def process(req: ProcessRequest):
     _persist_bill([item.model_dump() for item in items], overall)
 
     return ProcessResponse(items=items, overallConfidence=overall)
+
+
+@app.post("/process", response_model=ProcessResponse)
+async def process(req: ProcessRequest):
+    return await _run_processing(req)
+
+
+@app.post("/recognize", response_model=ProcessResponse)
+async def recognize(req: ProcessRequest):
+    return await _run_processing(req)
