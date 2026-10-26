@@ -26,9 +26,11 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
   late AnimationController _scanController;
   late Animation<double> _scanAnimation;
   RecognitionPipeline? _pipeline;
+  Timer? _wakeUpTimer;
   bool _isComplete = false;
   bool _hasError = false;
-  String _statusText = 'Analyzing strokes...';
+  String _statusText = 'Analyzing canvas...';
+  String _subStatusText = 'Preprocessing handwriting strokes';
   double _progress = 0.0;
 
   @override
@@ -50,7 +52,7 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
       case PipelineStage.idle:
         return 'Starting recognition...';
       case PipelineStage.preprocessing:
-        return 'Preprocessing canvas...';
+        return 'Preprocessing canvas image...';
       case PipelineStage.layoutAnalysis:
         return 'Analyzing rows and columns...';
       case PipelineStage.recognizing:
@@ -60,7 +62,7 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
       case PipelineStage.validating:
         return 'Validating line items...';
       case PipelineStage.enhancing:
-        return 'Enhancing with AI...';
+        return 'Polishing results...';
       case PipelineStage.complete:
         return 'Handwriting recognized!';
       case PipelineStage.error:
@@ -75,7 +77,9 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
       _progress = state.progress;
       if (state.stage == PipelineStage.error) {
         _hasError = true;
-        _statusText = state.error ?? 'Recognition failed';
+        _wakeUpTimer?.cancel();
+        _statusText = _formatFriendlyErrorMessage(state.error);
+        _subStatusText = 'Tap Retry to try again or check your connection.';
         _scanController.stop();
       } else {
         _statusText = _statusForStage(state.stage);
@@ -83,18 +87,62 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
     });
   }
 
+  String _formatFriendlyErrorMessage(String? rawError) {
+    if (rawError == null || rawError.isEmpty) {
+      return 'Recognition failed. Please try again.';
+    }
+    final lower = rawError.toLowerCase();
+    if (lower.contains('401') || lower.contains('authentication')) {
+      return 'Authentication failed: Invalid OCR API Key. Please verify your settings.';
+    }
+    if (lower.contains('timeout') || lower.contains('timed out')) {
+      return 'Server wake-up timed out. The server is spinning up from idle state. Please tap Retry.';
+    }
+    if (lower.contains('socket') || lower.contains('internet') || lower.contains('connect')) {
+      return 'Unable to reach OCR backend. Please check your internet connection.';
+    }
+    if (lower.contains('no handwriting') || lower.contains('no text')) {
+      return 'No handwriting detected on canvas. Please write clearly and try again.';
+    }
+    return rawError;
+  }
+
   Future<void> _startProcessing() async {
+    _wakeUpTimer?.cancel();
+    setState(() {
+      _hasError = false;
+      _isComplete = false;
+      _statusText = 'Preparing recognition...';
+      _subStatusText = 'Please wait while we process your handwriting';
+    });
+
+    if (!_scanController.isAnimating) {
+      _scanController.repeat(reverse: true);
+    }
+
     final pipeline = ref.read(recognitionPipelineProvider);
     _pipeline = pipeline;
+    pipeline.removeListener(_onPipelineChanged);
     pipeline.addListener(_onPipelineChanged);
 
     _onPipelineChanged();
+
+    // If server takes more than 4 seconds, inform the user about free-tier wake-up
+    _wakeUpTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && !_isComplete && !_hasError) {
+        setState(() {
+          _statusText = 'Waking up server...';
+          _subStatusText = 'Render free instances take ~60s on cold start. Hanging tight!';
+        });
+      }
+    });
 
     final result = await pipeline.extractBillStructure(
       widget.strokes,
       autoEnhance: true,
     );
 
+    _wakeUpTimer?.cancel();
     if (!mounted) return;
 
     result.when(
@@ -103,6 +151,7 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
           _isComplete = true;
           _progress = 1.0;
           _statusText = 'Handwriting recognized!';
+          _subStatusText = 'Redirecting to bill review...';
         });
         _scanController.stop();
         Future.delayed(const Duration(milliseconds: 300), () {
@@ -122,7 +171,8 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
       error: (failure) {
         setState(() {
           _hasError = true;
-          _statusText = failure.message;
+          _statusText = _formatFriendlyErrorMessage(failure.message);
+          _subStatusText = 'Tap Retry to try again.';
         });
         _scanController.stop();
       },
@@ -131,6 +181,7 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
 
   @override
   void dispose() {
+    _wakeUpTimer?.cancel();
     _pipeline?.removeListener(_onPipelineChanged);
     _scanController.dispose();
     super.dispose();
@@ -141,7 +192,7 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Processing'),
+        title: const Text('Processing Handwriting'),
         backgroundColor: Colors.white,
         foregroundColor: AppTheme.primaryColor,
         elevation: 0,
@@ -188,16 +239,18 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
                   style: const TextStyle(
                     fontSize: 16,
                     color: Colors.black87,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Please wait while we process your handwriting',
+                  _subStatusText,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.grey.shade500,
+                    color: Colors.grey.shade600,
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ],
               if (_isComplete) ...[
@@ -228,25 +281,37 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
                   style: const TextStyle(
                     fontSize: 16,
                     color: Colors.red,
+                    fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                Text(
+                  _subStatusText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: () {
-                    setState(() {
-                      _hasError = false;
-                      _statusText = 'Retrying...';
-                    });
                     _startProcessing();
                   },
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(160, 48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: const Text('Cancel & Return to Canvas'),
                 ),
               ],
             ],

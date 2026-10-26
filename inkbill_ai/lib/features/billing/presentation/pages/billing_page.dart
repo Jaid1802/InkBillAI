@@ -217,10 +217,9 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
 
         ref.invalidate(allBillsProvider);
 
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).clearSnackBars();
-          Navigator.of(context).pop();
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).clearSnackBars();
+        Navigator.of(context).pop();
       },
     );
   }
@@ -248,6 +247,7 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
             await repo.createBill(bill);
           }
           ref.invalidate(allBillsProvider);
+          if (!mounted) return;
           ScaffoldMessenger.of(context).clearSnackBars();
 
           final receiptData = ReceiptData.fromBill(bill);
@@ -268,12 +268,11 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
             name: 'Bill_${bill.id}',
           );
         } catch (e) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Couldn't open the print flow. Please try again.")),
-            );
-          }
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).clearSnackBars();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Couldn't open the print flow. Please try again.")),
+          );
         }
       },
     );
@@ -549,8 +548,7 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
               editor.setDiscount(effectiveDiscount);
               // After the notifier clamps, read back the stored value.
               final stored = ref
-                  .read(billEditorProvider(_initialBill).notifier)
-                  .state
+                  .read(billEditorProvider(_initialBill))
                   .discount;
               final typedWasClamped =
                   effectiveDiscount != stored && effectiveDiscount > stored;

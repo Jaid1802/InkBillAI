@@ -1,4 +1,4 @@
-package com.example.inkbill_ai
+package com.inkbill.ai
 
 import io.flutter.embedding.android.FlutterActivity
 
