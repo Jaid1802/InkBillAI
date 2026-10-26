@@ -6,6 +6,8 @@ import 'package:inkbill_ai/features/billing/domain/entities/bill_item.dart';
 import 'package:inkbill_ai/features/billing/presentation/providers/billing_provider.dart';
 import 'package:inkbill_ai/features/customers/domain/entities/customer.dart';
 import 'package:inkbill_ai/features/customers/presentation/providers/customer_provider.dart';
+import 'package:inkbill_ai/features/products/domain/entities/product.dart';
+import 'package:inkbill_ai/features/products/presentation/providers/product_provider.dart';
 import 'package:inkbill_ai/services/receipt_generator/receipt_generator.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -108,7 +110,10 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
   late TextEditingController _discountCtrl;
   late TextEditingController _taxCtrl;
   late TextEditingController _notesCtrl;
+  late FocusNode _itemNameFocusNode;
+  late FocusNode _qtyFocusNode;
   final _formKey = GlobalKey<FormState>();
+  String? _discountHelperText;
 
   @override
   void initState() {
@@ -129,6 +134,8 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
             ? (_initialBill.taxRate * 100).toStringAsFixed(1)
             : '');
     _notesCtrl = TextEditingController(text: _initialBill.notes ?? '');
+    _itemNameFocusNode = FocusNode();
+    _qtyFocusNode = FocusNode();
   }
 
   @override
@@ -139,6 +146,8 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
     _discountCtrl.dispose();
     _taxCtrl.dispose();
     _notesCtrl.dispose();
+    _itemNameFocusNode.dispose();
+    _qtyFocusNode.dispose();
     super.dispose();
   }
 
@@ -277,7 +286,7 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
         pw.Center(
           child: pw.Column(
             children: [
-              pw.Text(data.storeName, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+              pw.Text(data.storeName, style: const pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
               if (data.storeAddress != null) pw.Text(data.storeAddress!, style: const pw.TextStyle(fontSize: 12)),
               if (data.storePhone != null) pw.Text(data.storePhone!, style: const pw.TextStyle(fontSize: 12)),
             ],
@@ -329,7 +338,7 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
                 if (data.taxAmount > 0) pw.Text('Tax (${(data.taxRate * 100).toStringAsFixed(1)}%): ${AppConstants.currencySymbol}${data.taxAmount.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
                 if (data.discount > 0) pw.Text('Discount: -${AppConstants.currencySymbol}${data.discount.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 11)),
                 pw.SizedBox(height: 4),
-                pw.Text('TOTAL: ${AppConstants.currencySymbol}${data.total.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                pw.Text('TOTAL: ${AppConstants.currencySymbol}${data.total.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
               ],
             ),
           ],
@@ -420,14 +429,15 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
       children: [
         Expanded(
           flex: 3,
-          child: TextField(
+          child: _ProductAutocompleteField(
             controller: _itemNameCtrl,
-            decoration: const InputDecoration(
-              hintText: 'Item name or search product',
-              isDense: true,
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            ),
+            focusNode: _itemNameFocusNode,
+            onProductSelected: (product) {
+              _itemNameCtrl.text = product.name;
+              _rateCtrl.text = product.price.toStringAsFixed(2);
+              // Move focus to qty so the user can key in a quantity immediately.
+              _qtyFocusNode.requestFocus();
+            },
           ),
         ),
         const SizedBox(width: 4),
@@ -435,8 +445,13 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
           width: 55,
           child: TextField(
             controller: _qtyCtrl,
+            focusNode: _qtyFocusNode,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8)),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            ),
           ),
         ),
         const SizedBox(width: 4),
@@ -445,7 +460,11 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
           child: TextField(
             controller: _rateCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8)),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            ),
           ),
         ),
         IconButton(
@@ -481,6 +500,7 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
             _itemNameCtrl.clear();
             _qtyCtrl.text = '1';
             _rateCtrl.text = '0';
+            _itemNameFocusNode.requestFocus();
           },
         ),
       ],
@@ -501,7 +521,9 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (v) {
               final rate = double.tryParse(v);
-              if (rate != null && rate >= 0) {
+              if (v.trim().isEmpty || rate == null || rate < 0) {
+                editor.setTaxRate(0);
+              } else {
                 editor.setTaxRate(rate / 100);
               }
             },
@@ -511,17 +533,42 @@ class _BillEditorPageState extends ConsumerState<BillEditorPage> {
         Expanded(
           child: TextField(
             controller: _discountCtrl,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Discount',
               prefixText: '${AppConstants.currencySymbol} ',
               isDense: true,
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
+              errorText: _discountHelperText,
+              errorMaxLines: 2,
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (v) {
-              final discount = double.tryParse(v);
-              if (discount != null && discount >= 0) {
-                editor.setDiscount(discount);
+              final typed = double.tryParse(v);
+              final effectiveDiscount =
+                  (v.trim().isEmpty || typed == null || typed < 0) ? 0.0 : typed;
+              editor.setDiscount(effectiveDiscount);
+              // After the notifier clamps, read back the stored value.
+              final stored = ref
+                  .read(billEditorProvider(_initialBill).notifier)
+                  .state
+                  .discount;
+              final typedWasClamped =
+                  effectiveDiscount != stored && effectiveDiscount > stored;
+              if (typedWasClamped) {
+                // Update the field to the clamped value, cursor at end.
+                _discountCtrl.value = TextEditingValue(
+                  text: stored == 0 ? '' : stored.toStringAsFixed(2),
+                  selection: TextSelection.collapsed(
+                    offset: stored == 0 ? 0 : stored.toStringAsFixed(2).length,
+                  ),
+                );
+                setState(() {
+                  _discountHelperText = "Discount can't exceed subtotal";
+                });
+              } else {
+                if (_discountHelperText != null) {
+                  setState(() => _discountHelperText = null);
+                }
               }
             },
           ),
@@ -699,6 +746,7 @@ class _EditableBillItemRowState extends State<_EditableBillItemRow> {
   late TextEditingController _nameCtrl;
   late TextEditingController _qtyCtrl;
   late TextEditingController _rateCtrl;
+  final FocusNode _rateFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -706,6 +754,18 @@ class _EditableBillItemRowState extends State<_EditableBillItemRow> {
     _nameCtrl = TextEditingController(text: widget.item.name);
     _qtyCtrl = TextEditingController(text: widget.item.quantity.toString());
     _rateCtrl = TextEditingController(text: widget.item.rate.toStringAsFixed(2));
+    _rateFocusNode.addListener(_onRateFocusChange);
+  }
+
+  void _onRateFocusChange() {
+    if (!_rateFocusNode.hasFocus) {
+      final parsed = double.tryParse(_rateCtrl.text);
+      if (parsed != null) {
+        _rateCtrl.text = parsed.toStringAsFixed(2);
+      } else {
+        _rateCtrl.text = widget.item.rate.toStringAsFixed(2);
+      }
+    }
   }
 
   @override
@@ -715,11 +775,15 @@ class _EditableBillItemRowState extends State<_EditableBillItemRow> {
       _nameCtrl.text = widget.item.name;
       _qtyCtrl.text = widget.item.quantity.toString();
       _rateCtrl.text = widget.item.rate.toStringAsFixed(2);
+    } else if (oldWidget.item.rate != widget.item.rate && !_rateFocusNode.hasFocus) {
+      _rateCtrl.text = widget.item.rate.toStringAsFixed(2);
     }
   }
 
   @override
   void dispose() {
+    _rateFocusNode.removeListener(_onRateFocusChange);
+    _rateFocusNode.dispose();
     _nameCtrl.dispose();
     _qtyCtrl.dispose();
     _rateCtrl.dispose();
@@ -760,6 +824,7 @@ class _EditableBillItemRowState extends State<_EditableBillItemRow> {
             width: 70,
             child: TextField(
               controller: _rateCtrl,
+              focusNode: _rateFocusNode,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(isDense: true, border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8)),
               onChanged: (v) {
@@ -788,6 +853,136 @@ class _EditableBillItemRowState extends State<_EditableBillItemRow> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stage 5 – Product catalogue autocomplete for the bill-item name field
+// ---------------------------------------------------------------------------
+
+/// A text field that searches the product catalogue as the user types and
+/// offers inline suggestions. Selecting a suggestion calls [onProductSelected]
+/// so the caller can populate additional fields (rate, unit, etc.).
+class _ProductAutocompleteField extends ConsumerStatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<Product> onProductSelected;
+
+  const _ProductAutocompleteField({
+    required this.controller,
+    required this.focusNode,
+    required this.onProductSelected,
+  });
+
+  @override
+  ConsumerState<_ProductAutocompleteField> createState() =>
+      _ProductAutocompleteFieldState();
+}
+
+class _ProductAutocompleteFieldState
+    extends ConsumerState<_ProductAutocompleteField> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    // Resolve suggestions from the provider; empty query → no results.
+    final suggestionsAsync = _query.trim().isEmpty
+        ? const AsyncValue<List<Product>>.data([])
+        : ref.watch(productSearchProvider(_query.trim()));
+
+    final suggestions = suggestionsAsync.valueOrNull ?? <Product>[];
+
+    return RawAutocomplete<Product>(
+      textEditingController: widget.controller,
+      focusNode: widget.focusNode,
+      // Display string shown in the text field after selection.
+      displayStringForOption: (p) => p.name,
+      // Build the option list below/above the field.
+      optionsBuilder: (_) async => suggestions,
+      // Triggered when the user picks a suggestion.
+      onSelected: (product) {
+        widget.onProductSelected(product);
+      },
+      // The text field itself.
+      fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          decoration: const InputDecoration(
+            hintText: 'Item name or search product',
+            isDense: true,
+            border: OutlineInputBorder(),
+            contentPadding:
+                EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          ),
+          onChanged: (v) {
+            // Trigger a rebuild so the provider is re-watched with the new query.
+            setState(() => _query = v);
+          },
+          onSubmitted: (_) => onSubmitted(),
+        );
+      },
+      // The suggestion overlay.
+      optionsViewBuilder: (context, onSelected, options) {
+        if (options.isEmpty) return const SizedBox.shrink();
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240, maxWidth: 300),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final product = options.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelected(product),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  product.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (product.unit != null)
+                                  Text(
+                                    product.unit!,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade600),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '${AppConstants.currencySymbol}${product.price.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

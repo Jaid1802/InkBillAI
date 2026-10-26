@@ -102,8 +102,8 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
     if (error == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Email verified successfully!'),
+        const SnackBar(
+          content: Text('Email verified successfully!'),
           backgroundColor: AppTheme.successColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -147,8 +147,8 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
 
     if (error == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('A new verification code has been sent.'),
+        const SnackBar(
+          content: Text('A new verification code has been sent.'),
           backgroundColor: AppTheme.successColor,
           behavior: SnackBarBehavior.floating,
         ),
@@ -199,7 +199,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(Icons.email_outlined, size: 64, color: AppTheme.primaryColor),
+                const Icon(Icons.email_outlined, size: 64, color: AppTheme.primaryColor),
                 const SizedBox(height: 8),
                 Text(
                   'InkBill AI',
@@ -225,7 +225,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
                 Text(
                   widget.email,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.primaryColor,
@@ -234,7 +234,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
                 const SizedBox(height: 32),
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final gap = 6.0;
+                    const gap = 6.0;
                     final totalGaps = gap * 5;
                     final boxSize = ((constraints.maxWidth - totalGaps) / 6).floorToDouble().clamp(36.0, 56.0);
                     final fontSize = boxSize > 44 ? 22.0 : 18.0;
@@ -280,7 +280,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
+                                      borderSide: const BorderSide(color: AppTheme.primaryColor, width: 2),
                                     ),
                                   ),
                                   onChanged: (value) => _onDigitInput(index, value),
@@ -346,7 +346,7 @@ class _VerifyEmailPageState extends ConsumerState<VerifyEmailPage> {
                                   height: 16,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : Text(
+                              : const Text(
                                   'Resend code',
                                   style: TextStyle(
                                     fontSize: 14,

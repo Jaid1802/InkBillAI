@@ -79,6 +79,7 @@ class BillStructureResult extends Equatable {
   final double? total;
   final double confidence;
   final List<String> warnings;
+  final String rawText;
 
   const BillStructureResult({
     this.lineItems = const [],
@@ -86,11 +87,12 @@ class BillStructureResult extends Equatable {
     this.total,
     this.confidence = 0.0,
     this.warnings = const [],
+    this.rawText = '',
   });
 
   @override
   List<Object?> get props =>
-      [lineItems, customerData, total, confidence, warnings];
+      [lineItems, customerData, total, confidence, warnings, rawText];
 }
 
 class LineItemData extends Equatable {

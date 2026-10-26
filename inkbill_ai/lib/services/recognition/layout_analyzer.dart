@@ -201,7 +201,7 @@ class LayoutAnalyzer {
     double confidence = 0.5;
 
     if (lineDensity >= 2) confidence += 0.15;
-    if (lines.length >= 1 && lines.length <= 20) confidence += 0.1;
+    if (lines.isNotEmpty && lines.length <= 20) confidence += 0.1;
     if (lines.every((l) => l.height > 5 && l.height < 100)) confidence += 0.1;
 
     bool hasConsistentGaps = true;
@@ -220,7 +220,9 @@ class LayoutAnalyzer {
   double _strokeMidY(InkStroke stroke) {
     if (stroke.points.isEmpty) return 0;
     var sum = 0.0;
-    for (final p in stroke.points) sum += p.y;
+    for (final p in stroke.points) {
+      sum += p.y;
+    }
     return sum / stroke.points.length;
   }
 

@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:inkbill_ai/core/utils/result.dart';
+import 'package:inkbill_ai/core/errors/failures.dart';
 import 'package:inkbill_ai/features/ai/domain/entities/recognition_result.dart';
 import 'package:inkbill_ai/features/ai/domain/repositories/recognition_repository.dart';
 import 'package:inkbill_ai/features/handwriting/domain/entities/ink_stroke.dart';
@@ -17,6 +17,7 @@ enum PipelineStage {
   recognizing,
   parsing,
   validating,
+  enhancing,
   complete,
   error,
 }
@@ -27,6 +28,8 @@ class RecognitionPipelineState {
   final LayoutAnalysisResult? layoutResult;
   final BillParseResult? parseResult;
   final ValidationResult? validationResult;
+  final BillStructureResult? billResult;
+  final String? rawText;
   final double progress;
   final String? error;
 
@@ -36,6 +39,8 @@ class RecognitionPipelineState {
     this.layoutResult,
     this.parseResult,
     this.validationResult,
+    this.billResult,
+    this.rawText,
     this.progress = 0.0,
     this.error,
   });
@@ -46,12 +51,16 @@ class RecognitionPipelineState {
     LayoutAnalysisResult? layoutResult,
     BillParseResult? parseResult,
     ValidationResult? validationResult,
+    BillStructureResult? billResult,
+    String? rawText,
     double? progress,
     String? error,
     bool clearResult = false,
     bool clearLayout = false,
     bool clearParse = false,
     bool clearValidation = false,
+    bool clearBill = false,
+    bool clearRawText = false,
   }) {
     return RecognitionPipelineState(
       stage: stage ?? this.stage,
@@ -60,6 +69,8 @@ class RecognitionPipelineState {
       parseResult: clearParse ? null : (parseResult ?? this.parseResult),
       validationResult:
           clearValidation ? null : (validationResult ?? this.validationResult),
+      billResult: clearBill ? null : (billResult ?? this.billResult),
+      rawText: clearRawText ? null : (rawText ?? this.rawText),
       progress: progress ?? this.progress,
       error: error ?? this.error,
     );
@@ -125,8 +136,9 @@ class RecognitionPipeline extends ValueNotifier<RecognitionPipelineState> {
   }
 
   Future<Result<BillStructureResult>> extractBillStructure(
-    List<InkStroke> strokes,
-  ) async {
+    List<InkStroke> strokes, {
+    bool autoEnhance = true,
+  }) async {
     value = value.copyWith(stage: PipelineStage.preprocessing, progress: 0.05);
 
     value = value.copyWith(stage: PipelineStage.layoutAnalysis, progress: 0.2);
@@ -139,6 +151,8 @@ class RecognitionPipeline extends ValueNotifier<RecognitionPipelineState> {
     return repoResult.when(
       success: (data) {
         value = value.copyWith(
+          rawText: data.rawText,
+          billResult: data,
           progress: 0.7,
         );
 
@@ -171,15 +185,19 @@ class RecognitionPipeline extends ValueNotifier<RecognitionPipelineState> {
           );
         }).toList();
 
+        final validatedResult = BillStructureResult(
+          lineItems: validatedItems,
+          confidence: validationResult.overallConfidence,
+          rawText: data.rawText,
+        );
+
         value = value.copyWith(
           stage: PipelineStage.complete,
+          billResult: validatedResult,
           progress: 1.0,
         );
 
-        return Result.success(BillStructureResult(
-          lineItems: validatedItems,
-          confidence: validationResult.overallConfidence,
-        ));
+        return Result.success(validatedResult);
       },
       error: (failure) {
         value = value.copyWith(
@@ -189,6 +207,16 @@ class RecognitionPipeline extends ValueNotifier<RecognitionPipelineState> {
         return Result<BillStructureResult>.error(failure);
       },
     );
+  }
+
+  Future<Result<BillStructureResult>> enhanceWithAI({String? rawText}) async {
+    final baseResult = value.billResult;
+    if (baseResult == null) {
+      return Result.error(
+        const RecognitionFailure(message: 'No bill result to enhance'),
+      );
+    }
+    return Result.success(baseResult);
   }
 
   void reset() {

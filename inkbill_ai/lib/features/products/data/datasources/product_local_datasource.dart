@@ -14,7 +14,7 @@ class ProductLocalDataSource {
       final rows = await _db.select(_db.products).get();
       return Result.success(rows.map(_productFromRow).toList());
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get products'));
+      return Result.error(const DatabaseFailure(message: 'Failed to get products'));
     }
   }
 
@@ -23,7 +23,7 @@ class ProductLocalDataSource {
       final row = await (_db.select(_db.products)..where((p) => p.id.equals(id))).getSingleOrNull();
       return Result.success(row != null ? _productFromRow(row) : null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get product'));
+      return Result.error(const DatabaseFailure(message: 'Failed to get product'));
     }
   }
 
@@ -35,7 +35,7 @@ class ProductLocalDataSource {
           .get();
       return Result.success(rows.map(_productFromRow).toList());
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to search products'));
+      return Result.error(const DatabaseFailure(message: 'Failed to search products'));
     }
   }
 
@@ -57,7 +57,7 @@ class ProductLocalDataSource {
       ));
       return Result.success(product);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to create product'));
+      return Result.error(const DatabaseFailure(message: 'Failed to create product'));
     }
   }
 
@@ -77,7 +77,7 @@ class ProductLocalDataSource {
       ));
       return Result.success(product);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to update product'));
+      return Result.error(const DatabaseFailure(message: 'Failed to update product'));
     }
   }
 
@@ -86,7 +86,7 @@ class ProductLocalDataSource {
       await (_db.delete(_db.products)..where((p) => p.id.equals(id))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to delete product'));
+      return Result.error(const DatabaseFailure(message: 'Failed to delete product'));
     }
   }
 
@@ -95,7 +95,7 @@ class ProductLocalDataSource {
       final rows = await (_db.select(_db.products)..where((p) => p.stock.isSmallerThanValue(threshold))).get();
       return Result.success(rows.map(_productFromRow).toList());
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get low stock'));
+      return Result.error(const DatabaseFailure(message: 'Failed to get low stock'));
     }
   }
 
@@ -105,7 +105,7 @@ class ProductLocalDataSource {
           .write(ProductsCompanion(stock: Value(quantity)));
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to update stock'));
+      return Result.error(const DatabaseFailure(message: 'Failed to update stock'));
     }
   }
 

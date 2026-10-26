@@ -106,7 +106,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.edit_note, size: 64, color: AppTheme.primaryColor),
+                  const Icon(Icons.edit_note, size: 64, color: AppTheme.primaryColor),
                   const SizedBox(height: 8),
                   Text(
                     'InkBill AI',
@@ -245,7 +245,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                                       onTap: () {
                                         Navigator.push(context, MaterialPageRoute(builder: (_) => const TermsPage()));
                                       },
-                                      child: Text(
+                                      child: const Text(
                                         'Terms of Service',
                                         style: TextStyle(
                                           color: AppTheme.primaryColor,
@@ -261,7 +261,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                                       onTap: () {
                                         Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPage()));
                                       },
-                                      child: Text(
+                                      child: const Text(
                                         'Privacy Policy',
                                         style: TextStyle(
                                           color: AppTheme.primaryColor,
@@ -271,7 +271,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                                       ),
                                     ),
                                   ),
-                                  TextSpan(
+                                  const TextSpan(
                                     text: ' *',
                                     style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
@@ -349,7 +349,7 @@ class _SignupPageState extends ConsumerState<SignupPage> {
                         MaterialPageRoute(builder: (_) => const LoginPage()),
                       );
                     },
-                    child: const Text("Already have an account? Log in"),
+                    child: const Text('Already have an account? Log in'),
                   ),
                 ],
               ),

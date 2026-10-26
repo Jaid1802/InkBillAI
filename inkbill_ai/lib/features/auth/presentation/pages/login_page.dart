@@ -65,7 +65,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.edit_note, size: 64, color: AppTheme.primaryColor),
+                  const Icon(Icons.edit_note, size: 64, color: AppTheme.primaryColor),
                   const SizedBox(height: 8),
                   Text(
                     'InkBill AI',
@@ -154,7 +154,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 },
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: AppTheme.primaryColor,
-                                  side: BorderSide(color: AppTheme.primaryColor),
+                                  side: const BorderSide(color: AppTheme.primaryColor),
                                   padding: const EdgeInsets.symmetric(vertical: 8),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8),
@@ -174,7 +174,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                         height: 14,
                                         child: CircularProgressIndicator(strokeWidth: 2),
                                       )
-                                    : Text(
+                                    : const Text(
                                         'Resend verification code',
                                         style: TextStyle(fontSize: 12, color: AppTheme.primaryColor),
                                       ),

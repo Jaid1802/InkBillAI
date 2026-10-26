@@ -1,21 +1,14 @@
 services:
   - type: web
     name: inkbill-ocr-backend
-    runtime: python
-    rootDir: inkbill-ocr-backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
     plan: free
     autoDeploy: true
     healthCheckPath: /health
     envVars:
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GEMINI_MODEL
-        value: gemini-1.5-flash
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: ENABLE_SUPABASE_PERSIST
-        value: "false"
+      - key: OCR_API_KEY
+        generateValue: true
+      - key: OCR_MODEL_TYPE
+        value: server

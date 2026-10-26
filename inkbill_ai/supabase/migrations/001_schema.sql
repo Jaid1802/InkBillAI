@@ -173,10 +173,11 @@ begin
     )
   loop
     execute format('
-      create trigger if not exists trg_%s_updated_at
+      drop trigger if exists trg_%s_updated_at on public.%I;
+      create trigger trg_%s_updated_at
         before update on public.%I
         for each row execute function public.update_updated_at()',
-      t, t);
+      t, t, t, t);
   end loop;
 end;
 $$;

@@ -1,4 +1,3 @@
-import 'package:inkbill_ai/features/ai/domain/entities/recognition_result.dart';
 import 'package:inkbill_ai/services/recognition/bill_parser.dart';
 
 enum ValidationSeverity { error, warning, info }

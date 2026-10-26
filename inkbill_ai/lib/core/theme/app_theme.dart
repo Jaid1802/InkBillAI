@@ -25,28 +25,28 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       fontFamily: fontFamily,
-      colorScheme: ColorScheme(
+      colorScheme: const ColorScheme(
         brightness: Brightness.light,
         primary: primaryColor,
         onPrimary: white,
-        primaryContainer: const Color(0xFF001F3F),
-        onPrimaryContainer: const Color(0xFF6F88AD),
-        secondary: const Color(0xFF555F70),
+        primaryContainer: Color(0xFF001F3F),
+        onPrimaryContainer: Color(0xFF6F88AD),
+        secondary: Color(0xFF555F70),
         onSecondary: white,
-        secondaryContainer: const Color(0xFFD6E0F4),
-        onSecondaryContainer: const Color(0xFF596374),
-        tertiary: const Color(0xFF000807),
+        secondaryContainer: Color(0xFFD6E0F4),
+        onSecondaryContainer: Color(0xFF596374),
+        tertiary: Color(0xFF000807),
         onTertiary: white,
         error: errorColor,
         onError: white,
-        errorContainer: const Color(0xFFFFDAD6),
-        onErrorContainer: const Color(0xFF93000A),
+        errorContainer: Color(0xFFFFDAD6),
+        onErrorContainer: Color(0xFF93000A),
         surface: surface,
         onSurface: onSurface,
         onSurfaceVariant: onSurfaceVariant,
         outline: outline,
         outlineVariant: outlineVariant,
-        surfaceContainerHighest: const Color(0xFFE0E3E5),
+        surfaceContainerHighest: Color(0xFFE0E3E5),
       ),
       scaffoldBackgroundColor: surface,
       appBarTheme: const AppBarTheme(
@@ -66,7 +66,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: outlineVariant, width: 1),
+          side: const BorderSide(color: outlineVariant, width: 1),
         ),
         color: white,
       ),
@@ -95,11 +95,11 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: outlineVariant),
+          borderSide: const BorderSide(color: outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: outlineVariant),
+          borderSide: const BorderSide(color: outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -119,7 +119,7 @@ class AppTheme {
               color: primaryColor,
             );
           }
-          return TextStyle(
+          return const TextStyle(
             fontFamily: fontFamily,
             fontSize: 12,
             color: onSurfaceVariant,
@@ -129,7 +129,7 @@ class AppTheme {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: primaryColor, size: 24);
           }
-          return IconThemeData(color: onSurfaceVariant, size: 24);
+          return const IconThemeData(color: onSurfaceVariant, size: 24);
         }),
       ),
     );

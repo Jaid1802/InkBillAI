@@ -61,7 +61,7 @@ class _PrintOptionsSheetState extends State<PrintOptionsSheet> {
           child: pw.Column(
             children: [
               pw.Text(data.storeName,
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                       fontSize: 20, fontWeight: pw.FontWeight.bold)),
               if (data.storeAddress != null)
                 pw.Text(data.storeAddress!,
@@ -125,7 +125,7 @@ class _PrintOptionsSheetState extends State<PrintOptionsSheet> {
                 pw.SizedBox(height: 4),
                 pw.Text(
                     'TOTAL: ${AppConstants.currencySymbol}${data.total.toStringAsFixed(2)}',
-                    style: pw.TextStyle(
+                    style: const pw.TextStyle(
                         fontSize: 14,
                         fontWeight: pw.FontWeight.bold)),
               ],

@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inkbill_ai/core/supabase/supabase_config.dart';
@@ -9,8 +8,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          supabaseClientProvider.overrideWithProvider(
-            Provider((ref) => throw UnsupportedError('No Supabase in tests')),
+          supabaseClientProvider.overrideWith(
+            (ref) => throw UnsupportedError('No Supabase in tests'),
           ),
         ],
         child: const InkBillApp(),

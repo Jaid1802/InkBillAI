@@ -14,13 +14,18 @@ class BillingCalculator {
     }
 
     subtotal = MathUtils.roundTo(subtotal, 2);
-    final taxAmount = MathUtils.roundTo(subtotal * bill.taxRate, 2);
-    final total = MathUtils.roundTo(subtotal + taxAmount - bill.discount, 2);
+    final clampedTaxRate = bill.taxRate.clamp(0.0, 1.0);
+    final taxAmount = MathUtils.roundTo(subtotal * clampedTaxRate, 2);
+    final clampedDiscount = bill.discount.clamp(0.0, subtotal);
+    final rawTotal = MathUtils.roundTo(subtotal + taxAmount - clampedDiscount, 2);
+    final total = rawTotal < 0.0 ? 0.0 : rawTotal;
 
     return bill.copyWith(
       items: updatedItems,
       subtotal: subtotal,
+      taxRate: clampedTaxRate,
       taxAmount: taxAmount,
+      discount: clampedDiscount,
       total: total,
     );
   }
@@ -51,12 +56,14 @@ class BillingCalculator {
   }
 
   static Bill applyTaxRate(Bill bill, double taxRate) {
-    final clamped = taxRate < 0 ? 0.0 : (taxRate > 100 ? 100.0 : taxRate);
+    final clamped = taxRate.clamp(0.0, 1.0);
     return calculate(bill.copyWith(taxRate: clamped));
   }
 
   static Bill applyDiscount(Bill bill, double discount) {
-    return calculate(bill.copyWith(discount: discount < 0 ? 0 : discount));
+    final effectiveSubtotal = bill.subtotal > 0 ? bill.subtotal : calculateSubtotal(bill.items);
+    final clamped = discount.clamp(0.0, effectiveSubtotal);
+    return calculate(bill.copyWith(discount: clamped));
   }
 
   static double calculateSubtotal(List<BillItem> items) {
@@ -68,11 +75,13 @@ class BillingCalculator {
   }
 
   static double calculateTax(double subtotal, double taxRate) {
-    return MathUtils.roundTo(subtotal * taxRate, 2);
+    return MathUtils.roundTo(subtotal * taxRate.clamp(0.0, 1.0), 2);
   }
 
   static double calculateTotal(double subtotal, double taxAmount, double discount) {
-    return MathUtils.roundTo(subtotal + taxAmount - discount, 2);
+    final clampedDiscount = discount.clamp(0.0, subtotal);
+    final total = MathUtils.roundTo(subtotal + taxAmount - clampedDiscount, 2);
+    return total < 0.0 ? 0.0 : total;
   }
 
   static Map<String, double> calculateGstBreakdown(

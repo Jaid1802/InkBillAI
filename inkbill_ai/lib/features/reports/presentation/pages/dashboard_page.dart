@@ -7,7 +7,6 @@ import 'package:inkbill_ai/features/auth/presentation/providers/auth_provider.da
 import 'package:inkbill_ai/features/billing/domain/entities/bill.dart';
 import 'package:inkbill_ai/features/billing/presentation/providers/billing_provider.dart';
 import 'package:inkbill_ai/features/billing/presentation/pages/billing_page.dart';
-import 'package:inkbill_ai/features/customers/presentation/providers/customer_provider.dart';
 import 'package:inkbill_ai/widgets/shared/app_shell.dart';
 
 class DashboardPage extends ConsumerWidget {

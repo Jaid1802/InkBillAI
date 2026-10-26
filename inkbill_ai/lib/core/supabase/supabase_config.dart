@@ -3,25 +3,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseConfig {
-  static final String _url = const String.fromEnvironment(
+  static const String url = String.fromEnvironment(
     'SUPABASE_URL',
-    defaultValue: 'https://rzgeniuyavrljqkafwyn.supabase.co',
+    defaultValue: '',
   );
 
-  static final String _anonKey = const String.fromEnvironment(
+  static const String anonKey = String.fromEnvironment(
     'SUPABASE_ANON_KEY',
-    defaultValue: 'sb_publishable_57GRPFwcgLw4l7qO1W-N6w_j3NpPGvE',
+    defaultValue: '',
   );
+
+  static bool get isConfigured => url.isNotEmpty && anonKey.isNotEmpty;
 
   static SupabaseClient get client => Supabase.instance.client;
 
   static Future<void> initialize() async {
+    final effectiveUrl =
+        isConfigured ? url : 'https://placeholder.supabase.co';
+    final effectiveKey = isConfigured
+        ? anonKey
+        : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2MDAwMDAwMDAsImV4cCI6MTkwMDAwMDAwMH0.placeholder';
+
     await Supabase.initialize(
-      url: _url,
-      anonKey: _anonKey,
-      debug: kDebugMode,
+      url: effectiveUrl,
+      anonKey: effectiveKey,
+      debug: kDebugMode && isConfigured,
     );
-    if (kDebugMode) debugPrint('Supabase initialized: $_url');
+
+    if (kDebugMode) {
+      if (isConfigured) {
+        debugPrint('Supabase initialized with target URL: $url');
+      } else {
+        debugPrint(
+          'Supabase credentials not supplied via --dart-define. '
+          'Initialized in local offline/guest fallback mode.',
+        );
+      }
+    }
   }
 }
 

@@ -164,7 +164,7 @@ void main() {
       final stroke = InkStroke(
         id: 'test_str',
         pageId: 'test_page',
-        points: [
+        points: const [
           InkPoint(x: 0, y: 0, timestampMs: 0),
           InkPoint(x: 10, y: 10, timestampMs: 10),
         ],

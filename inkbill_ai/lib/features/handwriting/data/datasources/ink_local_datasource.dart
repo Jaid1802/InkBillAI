@@ -29,7 +29,7 @@ class InkLocalDataSource {
       }
       return Result.success(pages);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get pages'));
+      return Result.error(const DatabaseFailure(message: 'Failed to get pages'));
     }
   }
 
@@ -47,7 +47,7 @@ class InkLocalDataSource {
         label: row.label,
       ));
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get page'));
+      return Result.error(const DatabaseFailure(message: 'Failed to get page'));
     }
   }
 
@@ -70,7 +70,7 @@ class InkLocalDataSource {
         label: label,
       ));
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to create page'));
+      return Result.error(const DatabaseFailure(message: 'Failed to create page'));
     }
   }
 
@@ -88,7 +88,7 @@ class InkLocalDataSource {
       await _updatePageTimestamp(stroke.pageId);
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to save stroke'));
+      return Result.error(const DatabaseFailure(message: 'Failed to save stroke'));
     }
   }
 
@@ -112,7 +112,7 @@ class InkLocalDataSource {
       }
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to save strokes'));
+      return Result.error(const DatabaseFailure(message: 'Failed to save strokes'));
     }
   }
 
@@ -121,17 +121,17 @@ class InkLocalDataSource {
       await (_db.delete(_db.inkStrokes)..where((s) => s.id.equals(strokeId))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to delete stroke'));
+      return Result.error(const DatabaseFailure(message: 'Failed to delete stroke'));
     }
   }
 
   Future<Result<void>> eraseStroke(String strokeId) async {
     try {
       await (_db.update(_db.inkStrokes)..where((s) => s.id.equals(strokeId)))
-          .write(InkStrokesCompanion(isErased: Value(true)));
+          .write(const InkStrokesCompanion(isErased: Value(true)));
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to erase stroke'));
+      return Result.error(const DatabaseFailure(message: 'Failed to erase stroke'));
     }
   }
 
@@ -140,7 +140,7 @@ class InkLocalDataSource {
       await (_db.delete(_db.inkStrokes)..where((s) => s.pageId.equals(pageId))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to clear page'));
+      return Result.error(const DatabaseFailure(message: 'Failed to clear page'));
     }
   }
 
@@ -150,7 +150,7 @@ class InkLocalDataSource {
       await (_db.delete(_db.inkPages)..where((p) => p.id.equals(pageId))).go();
       return Result.success(null);
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to delete page'));
+      return Result.error(const DatabaseFailure(message: 'Failed to delete page'));
     }
   }
 
@@ -158,7 +158,32 @@ class InkLocalDataSource {
     try {
       return Result.success(await _getStrokesForPage(pageId));
     } catch (e) {
-      return Result.error(DatabaseFailure(message: 'Failed to get strokes'));
+      return Result.error(const DatabaseFailure(message: 'Failed to get strokes'));
+    }
+  }
+
+  Future<Result<List<InkStroke>>> getRecentlyModifiedStrokes({int limit = 50}) async {
+    try {
+      final rows = await (_db.select(_db.inkStrokes)
+        ..where((s) => s.isErased.equals(false))
+        ..orderBy([(s) => OrderingTerm(expression: s.createdAt, mode: OrderingMode.desc)])
+        ..limit(limit))
+          .get();
+      final strokes = rows.map((row) {
+        final points = InkStrokeModel.pointsFromJson(row.pointsJson);
+        return InkStroke(
+          id: row.id,
+          pageId: row.pageId,
+          points: points,
+          color: row.color,
+          width: row.width,
+          createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt),
+          isErased: row.isErased,
+        );
+      }).toList();
+      return Result.success(strokes);
+    } catch (e) {
+      return Result.error(const DatabaseFailure(message: 'Failed to get recently modified strokes'));
     }
   }
 

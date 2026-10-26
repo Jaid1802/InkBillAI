@@ -30,8 +30,8 @@ sealed class Result<T> extends Equatable {
     return null;
   }
 
-  factory Result.success(T data) = Success<T>;
-  factory Result.error(Failure failure) = Error<T>;
+  const factory Result.success(T data) = Success<T>;
+  const factory Result.error(Failure failure) = Error<T>;
 }
 
 class Success<T> extends Result<T> {

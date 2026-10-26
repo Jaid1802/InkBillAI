@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'package:inkbill_ai/features/ai/domain/entities/recognition_result.dart';
 
 class ParsedItem {
   final String name;

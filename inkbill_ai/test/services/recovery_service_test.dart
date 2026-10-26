@@ -15,7 +15,7 @@ void main() {
         InkStroke(
           id: 'str_1',
           pageId: 'page_1',
-          points: [
+          points: const [
             InkPoint(x: 10, y: 20, timestampMs: 1000),
             InkPoint(x: 20, y: 30, timestampMs: 1001),
           ],

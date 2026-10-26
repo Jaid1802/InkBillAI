@@ -38,7 +38,7 @@ class ImagePreprocessor {
     canvas.translate(-bounds.left, -bounds.top);
 
     for (final stroke in strokes) {
-      final blackStroke = stroke.copyWith(color: Colors.black.value);
+      final blackStroke = stroke.copyWith(color: Colors.black.toARGB32());
       try {
         final outlinePath =
             _renderer.buildPerfectFreehandPath(stroke.points, stroke.width);
@@ -98,8 +98,8 @@ class ImagePreprocessor {
 
   img.Image _adaptiveThreshold(img.Image src) {
     final dst = img.Image.from(src);
-    final blockSize = 15;
-    final c = 10;
+    const blockSize = 15;
+    const c = 10;
 
     for (var y = 0; y < src.height; y++) {
       for (var x = 0; x < src.width; x++) {
@@ -226,8 +226,11 @@ class ImagePreprocessor {
             if (dx == 0 && dy == 0) continue;
             final v =
                 img.getLuminance(src.getPixel(x + dx, y + dy)).toInt();
-            if (v < 128) blackNeighbors++;
-            else whiteNeighbors++;
+            if (v < 128) {
+              blackNeighbors++;
+            } else {
+              whiteNeighbors++;
+            }
           }
         }
 

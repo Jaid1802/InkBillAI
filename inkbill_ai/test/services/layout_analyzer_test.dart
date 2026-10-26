@@ -24,10 +24,10 @@ void main() {
         InkStroke(
           id: 's1',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 10, y: 20, timestampMs: 1),
-            const InkPoint(x: 50, y: 25, timestampMs: 2),
-            const InkPoint(x: 100, y: 22, timestampMs: 3),
+          points: const [
+            InkPoint(x: 10, y: 20, timestampMs: 1),
+            InkPoint(x: 50, y: 25, timestampMs: 2),
+            InkPoint(x: 100, y: 22, timestampMs: 3),
           ],
           createdAt: DateTime.now(),
         ),
@@ -44,18 +44,18 @@ void main() {
         InkStroke(
           id: 's1',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 10, y: 20, timestampMs: 1),
-            const InkPoint(x: 50, y: 25, timestampMs: 2),
+          points: const [
+            InkPoint(x: 10, y: 20, timestampMs: 1),
+            InkPoint(x: 50, y: 25, timestampMs: 2),
           ],
           createdAt: DateTime.now(),
         ),
         InkStroke(
           id: 's2',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 150, y: 22, timestampMs: 3),
-            const InkPoint(x: 200, y: 28, timestampMs: 4),
+          points: const [
+            InkPoint(x: 150, y: 22, timestampMs: 3),
+            InkPoint(x: 200, y: 28, timestampMs: 4),
           ],
           createdAt: DateTime.now(),
         ),
@@ -72,18 +72,18 @@ void main() {
         InkStroke(
           id: 's1',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 10, y: 20, timestampMs: 1),
-            const InkPoint(x: 50, y: 25, timestampMs: 2),
+          points: const [
+            InkPoint(x: 10, y: 20, timestampMs: 1),
+            InkPoint(x: 50, y: 25, timestampMs: 2),
           ],
           createdAt: DateTime.now(),
         ),
         InkStroke(
           id: 's2',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 10, y: 200, timestampMs: 3),
-            const InkPoint(x: 50, y: 205, timestampMs: 4),
+          points: const [
+            InkPoint(x: 10, y: 200, timestampMs: 3),
+            InkPoint(x: 50, y: 205, timestampMs: 4),
           ],
           createdAt: DateTime.now(),
         ),
@@ -99,9 +99,9 @@ void main() {
         InkStroke(
           id: 's1',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 20, y: 100, timestampMs: 1),
-            const InkPoint(x: 80, y: 105, timestampMs: 2),
+          points: const [
+            InkPoint(x: 20, y: 100, timestampMs: 1),
+            InkPoint(x: 80, y: 105, timestampMs: 2),
           ],
           createdAt: DateTime.now(),
         ),
@@ -119,8 +119,8 @@ void main() {
         InkStroke(
           id: 's1',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 10, y: 20, timestampMs: 1),
+          points: const [
+            InkPoint(x: 10, y: 20, timestampMs: 1),
           ],
           createdAt: DateTime.now(),
         ),
@@ -130,18 +130,18 @@ void main() {
         InkStroke(
           id: 's1',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 10, y: 20, timestampMs: 1),
-            const InkPoint(x: 20, y: 22, timestampMs: 2),
+          points: const [
+            InkPoint(x: 10, y: 20, timestampMs: 1),
+            InkPoint(x: 20, y: 22, timestampMs: 2),
           ],
           createdAt: DateTime.now(),
         ),
         InkStroke(
           id: 's2',
           pageId: 'p1',
-          points: [
-            const InkPoint(x: 10, y: 80, timestampMs: 3),
-            const InkPoint(x: 25, y: 85, timestampMs: 4),
+          points: const [
+            InkPoint(x: 10, y: 80, timestampMs: 3),
+            InkPoint(x: 25, y: 85, timestampMs: 4),
           ],
           createdAt: DateTime.now(),
         ),

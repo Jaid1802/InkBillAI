@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inkbill_ai/core/theme/app_theme.dart';
 import 'package:inkbill_ai/features/billing/presentation/pages/ocr_processing_page.dart';
 import 'package:inkbill_ai/features/handwriting/presentation/providers/canvas_provider.dart';
+import 'package:inkbill_ai/features/handwriting/presentation/providers/ink_pages_provider.dart';
 import 'package:inkbill_ai/features/handwriting/presentation/widgets/handwriting_canvas.dart';
 import 'package:inkbill_ai/services/canvas_engine/canvas_engine.dart';
+import 'package:inkbill_ai/services/recovery_service.dart';
 
 class InkNotePage extends ConsumerStatefulWidget {
   const InkNotePage({super.key});
@@ -15,7 +17,8 @@ class InkNotePage extends ConsumerStatefulWidget {
 
 class _InkNotePageState extends ConsumerState<InkNotePage>
     with SingleTickerProviderStateMixin {
-  late final String _pageId;
+  String? _pageId;
+  bool _isPageReady = false;
   bool _isRecognizing = false;
   bool _isFullScreen = false;
   bool _controlsVisible = true;
@@ -25,7 +28,6 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
   @override
   void initState() {
     super.initState();
-    _pageId = 'page_${DateTime.now().microsecondsSinceEpoch}';
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -35,6 +37,82 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
       curve: Curves.easeInOut,
     );
     _fadeController.value = 1.0;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initPageAndRecovery();
+    });
+  }
+
+  Future<void> _initPageAndRecovery() async {
+    final recovery = await RecoveryService.checkForRecovery();
+
+    if (recovery.pendingStrokes != null &&
+        recovery.pendingStrokes!.isNotEmpty &&
+        mounted) {
+      final shouldRestore = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Restore unsaved bill?'),
+          content: const Text(
+              'You have an unsaved handwriting canvas from a previous session. Would you like to restore it?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Discard'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+              ),
+              child: const Text('Restore'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldRestore == true && mounted) {
+        String targetPageId = recovery.pendingPageId ?? '';
+        if (targetPageId.isEmpty) {
+          final createRes = await ref.read(inkRepositoryProvider).createPage();
+          targetPageId = createRes.dataOrNull?.id ??
+              'page_${DateTime.now().microsecondsSinceEpoch}';
+        }
+
+        setState(() {
+          _pageId = targetPageId;
+          _isPageReady = true;
+        });
+
+        final engine = ref.read(canvasEngineProvider(targetPageId));
+        engine.loadStrokes(recovery.pendingStrokes!);
+        return;
+      } else {
+        await RecoveryService.clearRecovery();
+      }
+    }
+
+    if (!mounted) return;
+
+    final repo = ref.read(inkRepositoryProvider);
+    final createRes = await repo.createPage();
+    final pageId = createRes.dataOrNull?.id ??
+        'page_${DateTime.now().microsecondsSinceEpoch}';
+
+    setState(() {
+      _pageId = pageId;
+      _isPageReady = true;
+    });
+
+    final strokesRes = await repo.getStrokesForPage(pageId);
+    if (mounted && strokesRes.isSuccess) {
+      final strokes = strokesRes.dataOrNull ?? [];
+      if (strokes.isNotEmpty) {
+        final engine = ref.read(canvasEngineProvider(pageId));
+        engine.loadStrokes(strokes);
+      }
+    }
   }
 
   @override
@@ -67,7 +145,17 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(canvasStateProvider(_pageId));
+    if (!_isPageReady || _pageId == null) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryColor),
+        ),
+      );
+    }
+
+    final pageId = _pageId!;
+    final state = ref.watch(canvasStateProvider(pageId));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -84,7 +172,7 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
                   if (mounted) _hideControls();
                 });
               },
-              child: HandwritingCanvas(pageId: _pageId),
+              child: HandwritingCanvas(pageId: pageId),
             ),
             if (_isFullScreen)
               Positioned(
@@ -116,7 +204,7 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
   }
 
   Widget _buildBottomToolbar(CanvasState state) {
-    final engine = ref.read(canvasEngineProvider(_pageId));
+    final engine = ref.read(canvasEngineProvider(_pageId!));
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -194,7 +282,7 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
   }
 
   Widget _buildFloatingToolbar(CanvasState state) {
-    final engine = ref.read(canvasEngineProvider(_pageId));
+    final engine = ref.read(canvasEngineProvider(_pageId!));
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -273,7 +361,7 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
   }
 
   Widget _MiniToolbar({required CanvasState state}) {
-    final engine = ref.read(canvasEngineProvider(_pageId));
+    final engine = ref.read(canvasEngineProvider(_pageId!));
 
     return Container(
       padding: const EdgeInsets.all(6),
@@ -448,7 +536,7 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
   }
 
   void _recognizeInk(CanvasState state) async {
-    final engine = ref.read(canvasEngineProvider(_pageId));
+    final engine = ref.read(canvasEngineProvider(_pageId!));
 
     if (state.currentStroke != null) {
       engine.endStroke();
@@ -470,7 +558,7 @@ class _InkNotePageState extends ConsumerState<InkNotePage>
         MaterialPageRoute(
           builder: (_) => OcrProcessingPage(
             strokes: state.strokes,
-            pageId: _pageId,
+            pageId: _pageId!,
           ),
         ),
       );

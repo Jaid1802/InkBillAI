@@ -53,11 +53,13 @@ class Bill extends Equatable {
     DateTime? updatedAt,
     String? notes,
     String? inkPageId,
+    bool clearCustomer = false,
+    bool clearNotes = false,
   }) {
     return Bill(
       id: id ?? this.id,
-      customerId: customerId ?? this.customerId,
-      customerName: customerName ?? this.customerName,
+      customerId: clearCustomer ? null : (customerId ?? this.customerId),
+      customerName: clearCustomer ? null : (customerName ?? this.customerName),
       items: items ?? this.items,
       subtotal: subtotal ?? this.subtotal,
       taxRate: taxRate ?? this.taxRate,
@@ -67,7 +69,7 @@ class Bill extends Equatable {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      notes: notes ?? this.notes,
+      notes: clearNotes ? null : (notes ?? this.notes),
       inkPageId: inkPageId ?? this.inkPageId,
     );
   }

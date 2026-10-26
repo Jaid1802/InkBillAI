@@ -85,7 +85,7 @@ void main() {
       for (var i = 0; i < 100; i++) {
         final cx = 100.0 + (i % 10) * 80.0;
         final cy = 100.0 + (i ~/ 10) * 80.0;
-        final r = 30.0;
+        const r = 30.0;
 
         engine.beginStroke(cx + r, cy, pressure: 0.5, pointerId: i);
 

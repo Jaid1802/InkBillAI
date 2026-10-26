@@ -114,7 +114,7 @@ class _EditItemBottomSheetState extends State<EditItemBottomSheet> {
               Expanded(
                 child: TextField(
                   controller: _rateCtrl,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Rate (${AppConstants.currencySymbol})',
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),

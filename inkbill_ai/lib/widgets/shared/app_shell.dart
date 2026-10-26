@@ -155,7 +155,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                           ),
                           Text(
                             authState.user?.email ?? '',
-                            style: TextStyle(
+                            style: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey),
                           ),

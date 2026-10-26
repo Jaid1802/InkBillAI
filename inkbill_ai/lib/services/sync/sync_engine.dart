@@ -61,7 +61,7 @@ class SyncEngine {
           .select()
           .eq('shop_id', shopId)
           .isFilter('deleted_at', null);
-      return data as List<Map<String, dynamic>>;
+      return data;
     } catch (e) {
       debugPrint('Sync customers error: [REDACTED]');
       return [];
@@ -75,7 +75,7 @@ class SyncEngine {
           .select()
           .eq('shop_id', shopId)
           .isFilter('deleted_at', null);
-      return data as List<Map<String, dynamic>>;
+      return data;
     } catch (e) {
       debugPrint('Sync products error: [REDACTED]');
       return [];
@@ -88,7 +88,7 @@ class SyncEngine {
           .from('bills')
           .select('*, bill_items(*)')
           .eq('shop_id', shopId);
-      return data as List<Map<String, dynamic>>;
+      return data;
     } catch (e) {
       debugPrint('Sync bills error: [REDACTED]');
       return [];
@@ -102,7 +102,7 @@ class SyncEngine {
           .select()
           .eq('shop_id', shopId)
           .isFilter('deleted_at', null);
-      return data as List<Map<String, dynamic>>;
+      return data;
     } catch (e) {
       debugPrint('Sync ink documents error: [REDACTED]');
       return [];

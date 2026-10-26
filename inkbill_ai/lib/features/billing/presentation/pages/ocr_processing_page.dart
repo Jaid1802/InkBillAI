@@ -5,6 +5,7 @@ import 'package:inkbill_ai/core/theme/app_theme.dart';
 import 'package:inkbill_ai/features/ai/presentation/providers/recognition_provider.dart';
 import 'package:inkbill_ai/features/handwriting/domain/entities/ink_stroke.dart';
 import 'package:inkbill_ai/features/billing/presentation/pages/recognized_bill_page.dart';
+import 'package:inkbill_ai/services/recognition/recognition_pipeline.dart';
 
 class OcrProcessingPage extends ConsumerStatefulWidget {
   final List<InkStroke> strokes;
@@ -24,6 +25,7 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _scanController;
   late Animation<double> _scanAnimation;
+  RecognitionPipeline? _pipeline;
   bool _isComplete = false;
   bool _hasError = false;
   String _statusText = 'Analyzing strokes...';
@@ -43,21 +45,55 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
     _startProcessing();
   }
 
+  String _statusForStage(PipelineStage stage) {
+    switch (stage) {
+      case PipelineStage.idle:
+        return 'Starting recognition...';
+      case PipelineStage.preprocessing:
+        return 'Preprocessing canvas...';
+      case PipelineStage.layoutAnalysis:
+        return 'Analyzing rows and columns...';
+      case PipelineStage.recognizing:
+        return 'Recognizing handwriting...';
+      case PipelineStage.parsing:
+        return 'Extracting bill items...';
+      case PipelineStage.validating:
+        return 'Validating line items...';
+      case PipelineStage.enhancing:
+        return 'Enhancing with AI...';
+      case PipelineStage.complete:
+        return 'Handwriting recognized!';
+      case PipelineStage.error:
+        return 'Recognition failed';
+    }
+  }
+
+  void _onPipelineChanged() {
+    if (!mounted || _pipeline == null) return;
+    final state = _pipeline!.value;
+    setState(() {
+      _progress = state.progress;
+      if (state.stage == PipelineStage.error) {
+        _hasError = true;
+        _statusText = state.error ?? 'Recognition failed';
+        _scanController.stop();
+      } else {
+        _statusText = _statusForStage(state.stage);
+      }
+    });
+  }
+
   Future<void> _startProcessing() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-    setState(() => _statusText = 'Detecting rows...');
-
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() => _statusText = 'Recognizing handwriting...');
-
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-    setState(() => _statusText = 'Extracting bill items...');
-
     final pipeline = ref.read(recognitionPipelineProvider);
-    final result = await pipeline.extractBillStructure(widget.strokes);
+    _pipeline = pipeline;
+    pipeline.addListener(_onPipelineChanged);
+
+    _onPipelineChanged();
+
+    final result = await pipeline.extractBillStructure(
+      widget.strokes,
+      autoEnhance: true,
+    );
 
     if (!mounted) return;
 
@@ -66,9 +102,10 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
         setState(() {
           _isComplete = true;
           _progress = 1.0;
+          _statusText = 'Handwriting recognized!';
         });
         _scanController.stop();
-        Future.delayed(const Duration(milliseconds: 400), () {
+        Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
@@ -94,6 +131,7 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
 
   @override
   void dispose() {
+    _pipeline?.removeListener(_onPipelineChanged);
     _scanController.dispose();
     super.dispose();
   }
@@ -139,7 +177,7 @@ class _OcrProcessingPageState extends ConsumerState<OcrProcessingPage>
                     return CustomPaint(
                       size: const Size(200, 4),
                       painter: _ProgressBarPainter(
-                        progress: _scanAnimation.value,
+                        progress: _progress > 0 ? _progress : _scanAnimation.value,
                       ),
                     );
                   },

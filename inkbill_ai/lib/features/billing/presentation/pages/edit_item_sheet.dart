@@ -128,9 +128,9 @@ class _EditItemSheetState extends State<EditItemSheet> {
               Expanded(
                 child: TextField(
                   controller: _rateCtrl,
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Rate',
-                    border: const OutlineInputBorder(),
+                    border: OutlineInputBorder(),
                     isDense: true,
                     prefixText: '${AppConstants.currencySymbol} ',
                   ),

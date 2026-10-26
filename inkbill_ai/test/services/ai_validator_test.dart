@@ -22,7 +22,7 @@ void main() {
 
     test('detects low confidence items', () {
       final items = [
-        ParsedItem(
+        const ParsedItem(
           name: 'Unknown Item',
           nameConfidence: 0.3,
         ),
@@ -42,7 +42,7 @@ void main() {
 
     test('detects missing quantity', () {
       final items = [
-        ParsedItem(
+        const ParsedItem(
           name: 'Apple',
           nameConfidence: 0.9,
           rate: 50.0,
@@ -66,7 +66,7 @@ void main() {
 
     test('detects missing rate', () {
       final items = [
-        ParsedItem(
+        const ParsedItem(
           name: 'Apple',
           nameConfidence: 0.9,
           quantity: 2.0,
@@ -90,7 +90,7 @@ void main() {
 
     test('detects amount mismatch', () {
       final items = [
-        ParsedItem(
+        const ParsedItem(
           name: 'Apple',
           nameConfidence: 0.9,
           quantity: 2.0,
@@ -127,7 +127,7 @@ void main() {
 
     test('warns when overall confidence is low', () {
       final items = [
-        ParsedItem(
+        const ParsedItem(
           name: 'Apple',
           nameConfidence: 0.9,
           quantity: 2.0,

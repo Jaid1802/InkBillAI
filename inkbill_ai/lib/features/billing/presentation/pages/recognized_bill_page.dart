@@ -12,6 +12,7 @@ import 'package:inkbill_ai/services/receipt_generator/receipt_generator.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
+import 'package:inkbill_ai/services/recovery_service.dart';
 
 class RecognizedBillPage extends ConsumerStatefulWidget {
   final List<LineItemData> items;
@@ -54,7 +55,7 @@ class _RecognizedBillPageState extends ConsumerState<RecognizedBillPage> {
   late List<BillItemEditable> _items;
   double _taxRate = 0;
   double _discount = 0;
-  String _notes = '';
+  final String _notes = '';
   String? _customerName;
   bool _isSaving = false;
 
@@ -168,6 +169,7 @@ class _RecognizedBillPageState extends ConsumerState<RecognizedBillPage> {
       final repo = ref.read(billingRepositoryProvider);
       final bill = _buildBill();
       await repo.createBill(bill);
+      await RecoveryService.clearRecovery();
       ref.invalidate(allBillsProvider);
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -217,7 +219,7 @@ class _RecognizedBillPageState extends ConsumerState<RecognizedBillPage> {
           child: pw.Column(
             children: [
               pw.Text(data.storeName,
-                  style: pw.TextStyle(
+                  style: const pw.TextStyle(
                       fontSize: 20, fontWeight: pw.FontWeight.bold)),
               if (data.storeAddress != null)
                 pw.Text(data.storeAddress!,
@@ -249,16 +251,16 @@ class _RecognizedBillPageState extends ConsumerState<RecognizedBillPage> {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text('Item',
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                     fontWeight: pw.FontWeight.bold, fontSize: 10)),
             pw.Text('Qty',
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                     fontWeight: pw.FontWeight.bold, fontSize: 10)),
             pw.Text('Rate',
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                     fontWeight: pw.FontWeight.bold, fontSize: 10)),
             pw.Text('Amount',
-                style: pw.TextStyle(
+                style: const pw.TextStyle(
                     fontWeight: pw.FontWeight.bold, fontSize: 10)),
           ],
         ),
@@ -306,7 +308,7 @@ class _RecognizedBillPageState extends ConsumerState<RecognizedBillPage> {
                 pw.SizedBox(height: 4),
                 pw.Text(
                     'TOTAL: ${AppConstants.currencySymbol}${data.total.toStringAsFixed(2)}',
-                    style: pw.TextStyle(
+                    style: const pw.TextStyle(
                         fontSize: 14, fontWeight: pw.FontWeight.bold)),
               ],
             ),

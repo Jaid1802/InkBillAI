@@ -49,7 +49,6 @@ class InkRepositoryImpl implements InkRepository {
 
   @override
   Future<Result<List<InkStroke>>> getRecentlyModifiedStrokes(
-      {int limit = 50}) async {
-    return _dataSource.getStrokesForPage('');
-  }
+      {int limit = 50}) =>
+      _dataSource.getRecentlyModifiedStrokes(limit: limit);
 }

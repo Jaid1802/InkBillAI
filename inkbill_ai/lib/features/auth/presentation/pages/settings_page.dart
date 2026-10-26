@@ -21,7 +21,7 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _SectionHeader(title: 'Information'),
+          const _SectionHeader(title: 'Information'),
           Card(
             child: Column(
               children: [
@@ -40,7 +40,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _SectionHeader(title: 'Account'),
+          const _SectionHeader(title: 'Account'),
           Card(
             child: Column(
               children: [
@@ -54,7 +54,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _SectionHeader(title: 'Privacy & Legal'),
+          const _SectionHeader(title: 'Privacy & Legal'),
           Card(
             child: Column(
               children: [
@@ -75,7 +75,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _SectionHeader(title: 'Data'),
+          const _SectionHeader(title: 'Data'),
           Card(
             child: Column(
               children: [
@@ -89,7 +89,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _SectionHeader(title: 'Session'),
+          const _SectionHeader(title: 'Session'),
           Card(
             child: Column(
               children: [

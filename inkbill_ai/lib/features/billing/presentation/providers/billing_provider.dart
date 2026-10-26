@@ -53,7 +53,11 @@ class BillEditor extends StateNotifier<Bill> {
   }
 
   void setCustomer(String? customerId, String? customerName) {
-    state = state.copyWith(customerId: customerId, customerName: customerName);
+    if (customerId == null && customerName == null) {
+      state = state.copyWith(clearCustomer: true);
+    } else {
+      state = state.copyWith(customerId: customerId, customerName: customerName);
+    }
   }
 
   void setCustomerFromCustomerEntity(Customer customer) {
@@ -72,7 +76,11 @@ class BillEditor extends StateNotifier<Bill> {
   }
 
   void setNotes(String? notes) {
-    state = state.copyWith(notes: notes);
+    if (notes == null || notes.isEmpty) {
+      state = state.copyWith(clearNotes: true);
+    } else {
+      state = state.copyWith(notes: notes);
+    }
   }
 
   void updateItemQuantity(String itemId, double quantity) {

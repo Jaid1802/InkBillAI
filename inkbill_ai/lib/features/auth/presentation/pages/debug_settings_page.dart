@@ -17,8 +17,8 @@ class DebugSettingsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _SectionHeader(title: 'App Info'),
-          Card(
+          const _SectionHeader(title: 'App Info'),
+          const Card(
             child: Column(
               children: [
                 _InfoTile(label: 'App Version', value: AppConstants.version),
@@ -29,7 +29,7 @@ class DebugSettingsPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _SectionHeader(title: 'Developer Tools'),
+          const _SectionHeader(title: 'Developer Tools'),
           Card(
             child: Column(
               children: [
@@ -91,7 +91,7 @@ class DebugSettingsPage extends ConsumerWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               _DbInfoRow('Bills', billCount),
-                              _DbInfoRow('Bill Items', 0),
+                              const _DbInfoRow('Bill Items', 0),
                               _DbInfoRow('Customers', customerCount),
                               _DbInfoRow('Products', productCount),
                               _DbInfoRow('Ink Pages', pageCount),

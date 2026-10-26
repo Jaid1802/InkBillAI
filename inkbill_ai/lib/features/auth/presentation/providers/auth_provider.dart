@@ -252,9 +252,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void enableGuestMode() {
     debugPrint('[AUTH_STATE] enableGuestMode');
-    state = AuthState(
+    state = const AuthState(
       isGuest: true,
-      user: const AuthUser(
+      user: AuthUser(
         id: 'guest-local-user',
         fullName: 'Guest',
         email: 'guest@inkbill.app',
